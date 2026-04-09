@@ -22,11 +22,11 @@ TRANSLATION_URL = os.getenv("TRANSLATION_URL",  "http://translation-service:8002
 TTS_URL         = os.getenv("TTS_URL",          "http://tts-service:8003")
 COLLECTOR_URL   = os.getenv("COLLECTOR_URL",    "http://transcription-collector:8006")
 
-# Shared async HTTP client (connection pooling)
-_client = httpx.AsyncClient(timeout=8.0, limits=httpx.Limits(max_connections=50))
+# Shared async HTTP client (connection pooling). Set high timeout because CPU processing takes time.
+_client = httpx.AsyncClient(timeout=300.0, limits=httpx.Limits(max_connections=50))
 
-# Whisper language code mapping
-_LANG_MAP = {"jpn_Jpan": "ja", "eng_Latn": "en", "vie_Latn": "vi"}
+# Qwen3-ASR nhận thẳng NLLB code (jpn_Jpan, eng_Latn, vie_Latn...)
+# main.py của whisperlive-wrapper tự map sang tên ngôn ngữ đầy đủ (Japanese, English, Vietnamese)
 
 
 class AudioPipeline:
@@ -43,20 +43,29 @@ class AudioPipeline:
         t0 = time.perf_counter()
         try:
             audio_b64 = frame.get("data", "")
-            src_lang  = frame.get("src_lang", "jpn_Jpan")
+            src_lang  = frame.get("src_lang", "eng_Latn")
             tgt_lang  = frame.get("tgt_lang", "vie_Latn")
 
             if not audio_b64:
                 return
 
-            # ── Step 1: ASR (Faster Whisper) ──────────────────
+            # ── Step 1: ASR (Qwen3-ASR-0.6B) ──────────────────
+            t_asr_start = time.perf_counter()
             asr = await _client.post(f"{WHISPERLIVE_URL}/transcribe", json={
                 "audio_b64":  audio_b64,
-                "language":   _LANG_MAP.get(src_lang),
+                "language":   src_lang,   # Gửi NLLB code, wrapper tự map
                 "vad_filter": True,
             })
             asr.raise_for_status()
             original_text = asr.json().get("text", "").strip()
+            
+            t_asr_end = time.perf_counter()
+            asr_latency = (t_asr_end - t_asr_start) * 1000
+            
+            # --- DEBUG PRINT ---
+            print(f"🎙️ [QWEN3-ASR RAW TEXT]: '{original_text}'", flush=True)
+            # -------------------
+            
             if not original_text:
                 return  # Silence / no speech detected
 
@@ -64,7 +73,8 @@ class AudioPipeline:
             # — gives user instant feedback that audio is received
             await ws.send_json({"type": "listening", "text": f"[{src_lang[:2].upper()}] {original_text[:60]}"})
 
-            # ── Step 2: Translation (NLLB) ─────────────────────
+            # ── Step 2: Translation (NLLB) ── [ĐÃ TẠM TẮT ĐỂ TRẢ NHANH KẾT QUẢ WHISPER] ──
+            t_nllb_start = time.perf_counter()
             nllb = await _client.post(f"{TRANSLATION_URL}/translate", json={
                 "text":     original_text,
                 "src_lang": src_lang,
@@ -72,12 +82,25 @@ class AudioPipeline:
             })
             nllb.raise_for_status()
             translated_text = nllb.json().get("translated_text", "")
+            
+            t_nllb_end = time.perf_counter()
+            nllb_latency = (t_nllb_end - t_nllb_start) * 1000
+            
+            # translated_text = original_text # Hiển thị luôn bản gốc ra hộp to để bạn kiểm tra
+
 
             latency_ms = (time.perf_counter() - t0) * 1000
+            
+            # --- DEBUG TIMING PRINT ---
+            print(f"⏱️ [TIMING] Nhận Audio -> ASR (Chép chính tả): {asr_latency:.0f}ms | NLLB (Dịch): {nllb_latency:.0f}ms | Tổng: {latency_ms:.0f}ms", flush=True)
+            # --------------------------
+            nllb_latency = 0
 
             # ── Branch A — Inbound: return TTS audio + subtitle ─
             if direction == "inbound":
-                tts_audio_b64 = await self._synthesize(translated_text)
+                # Đã tạm tắt TTS (Phát giọng đọc) để luồng chạy cực nhanh
+                # tts_audio_b64 = await self._synthesize(translated_text)
+                tts_audio_b64 = None
                 await ws.send_json({
                     "type":             "inbound_result",
                     "original_text":    original_text,

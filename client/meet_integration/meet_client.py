@@ -75,22 +75,27 @@ class MeetClient:
 
     def _send(self, text: str) -> bool:
         """
-        Đẩy text vào queue ở bridge_server, để Chrome extension poll `/poll`
-        và inject vào Meet chat.
+        Đẩy text vào queue ở bridge_server (Extension Google Meet).
+        Đã được bọc bằng Thread để không làm đơ giao diện chính của App khi chờ mạng.
         """
-        try:
-            r = requests.post(
-                f"http://localhost:{BRIDGE_PORT}/enqueue",
-                json={"text": text},
-                timeout=1.5,
-            )
-            ok = bool(getattr(r, "ok", False))
-            if not ok:
-                logger.warning(f"Meet enqueue failed: {r.status_code} {r.text[:120]}")
-            return ok
-        except Exception as e:
-            logger.warning(f"Meet enqueue error: {e}")
-            return False
+        import threading
+        
+        def _do_post():
+            try:
+                r = requests.post(
+                    f"http://localhost:{BRIDGE_PORT}/enqueue",
+                    json={"text": text},
+                    timeout=1.5,
+                )
+                ok = bool(getattr(r, "ok", False))
+                if not ok:
+                    logger.warning(f"Meet enqueue failed: {r.status_code} {r.text[:120]}")
+            except Exception as e:
+                logger.warning(f"Meet enqueue error: {e}")
+                
+        # Ném lệnh gọi HTTP sang một luồng phụ để App hiện chữ dịch ngay lập tức
+        threading.Thread(target=_do_post, daemon=True).start()
+        return True
 
     # ─────────────────────────────────────────────
     # Meeting Join / Leave

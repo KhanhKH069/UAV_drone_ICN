@@ -4,3 +4,6 @@ transformers==4.41.2
 torch==2.3.0
 sentencepiece==0.2.0
 sacremoses==0.1.1
+accelerate==0.27.0
+bitsandbytes==0.43.1    # 8-bit quantization (giảm VRAM ~50%)
+

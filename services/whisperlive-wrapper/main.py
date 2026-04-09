@@ -1,7 +1,9 @@
 """
 services/whisperlive-wrapper/main.py
-Faster-Whisper ASR Service.
-Vexa pattern: WhisperLive / transcription-service.
+ASR Orchestrator — chọn backend qua env var ASR_BACKEND.
+
+  ASR_BACKEND=faster_whisper  → Faster Whisper (mặc định, ổn định)
+  ASR_BACKEND=qwen3_asr       → Qwen3-ASR-0.6B (mới, thử nghiệm)
 
 POST /transcribe  →  { text, language, segments, latency_ms }
 """
@@ -9,22 +11,20 @@ import base64
 import logging
 import os
 import time
+import wave
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from faster_whisper import WhisperModel
+import json
 
 logger = logging.getLogger("paraline.whisperlive")
 
-MODEL_SIZE   = os.getenv("WHISPER_MODEL",        "large-v3")
-DEVICE       = os.getenv("WHISPER_DEVICE",       "cuda")
-COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
-MODEL_DIR    = os.getenv("MODEL_CACHE_DIR",      "/models/whisper")
-
-# If set, skip real ASR and return this text directly (for audio mock testing)
-MOCK_TRANSCRIPTION_TEXT = os.getenv("MOCK_TRANSCRIPTION_TEXT", "")
+# ─────────────────────────────────────────────────────────────
+# Chọn backend qua env var — không cần sửa code khi đổi model
+# ─────────────────────────────────────────────────────────────
+ASR_BACKEND = os.getenv("ASR_BACKEND", "faster_whisper")
 
 _MOCK_PHRASES = [
     "Hello everyone, today we will discuss the project timeline.",
@@ -35,16 +35,42 @@ _MOCK_PHRASES = [
 ]
 _mock_idx = 0
 
-logger.info(f"Loading Whisper {MODEL_SIZE} on {DEVICE} ({COMPUTE_TYPE})...")
-_model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE, download_root=MODEL_DIR)
-logger.info("✅ Whisper loaded")
+print(f"🔧 [ASR Orchestrator] Khởi động backend: '{ASR_BACKEND}'...", flush=True)
+_backend = None
 
-app = FastAPI(title="Paraline WhisperLive")
+try:
+    if ASR_BACKEND == "faster_whisper":
+        from backends.faster_whisper_backend import FasterWhisperBackend
+        _backend = FasterWhisperBackend()
+
+    elif ASR_BACKEND == "qwen3_asr":
+        from backends.qwen3_asr_backend import Qwen3ASRBackend
+        _backend = Qwen3ASRBackend()
+
+    elif ASR_BACKEND == "sensevoice":
+        from backends.sensevoice_backend import SenseVoiceBackend
+        _backend = SenseVoiceBackend()
+
+    else:
+        raise ValueError(
+            f"ASR_BACKEND không hợp lệ: '{ASR_BACKEND}'. "
+            "Chọn 'faster_whisper', 'qwen3_asr', hoặc 'sensevoice'."
+        )
+
+    print(f"✅ [ASR Orchestrator] Backend '{_backend.name}' đã sẵn sàng!", flush=True)
+
+except Exception as e:
+    _backend = None
+    print(f"❌ [ASR Orchestrator] Lỗi tải backend '{ASR_BACKEND}': {e}", flush=True)
+    logger.error(f"Backend load error: {e}", exc_info=True)
+
+
+app = FastAPI(title=f"Paraline ASR [{ASR_BACKEND}]")
 
 
 class TranscribeReq(BaseModel):
     audio_b64: str
-    language: str = "ja"       # Whisper language code (ja/en/vi/auto)
+    language: str = "auto"  # NLLB code hoặc "auto"
     sample_rate: int = 16000
     beam_size: int = 5
     vad_filter: bool = True
@@ -60,62 +86,118 @@ class TranscribeResp(BaseModel):
 @app.post("/transcribe", response_model=TranscribeResp)
 async def transcribe(req: TranscribeReq):
     global _mock_idx
-    t0 = time.perf_counter()
 
-    # ── Mock bypass (set MOCK_TRANSCRIPTION_TEXT=__cycle__ in .env) ───────
+    # ── Mock bypass ───────────────────────────────────────────────────────────
     mock_text = os.getenv("MOCK_TRANSCRIPTION_TEXT", "")
     if mock_text == "__cycle__":
         text = _MOCK_PHRASES[_mock_idx % len(_MOCK_PHRASES)]
         _mock_idx += 1
-        ms = (time.perf_counter() - t0) * 1000
         logger.info(f"[mock] returning preset phrase: {text[:60]}")
-        return TranscribeResp(text=text, language=req.language, latency_ms=round(ms, 1), segments=[])
+        return TranscribeResp(text=text, language="en", latency_ms=0.0, segments=[])
     elif mock_text:
-        ms = (time.perf_counter() - t0) * 1000
         logger.info(f"[mock] returning fixed text: {mock_text[:60]}")
-        return TranscribeResp(text=mock_text, language=req.language, latency_ms=round(ms, 1), segments=[])
+        return TranscribeResp(text=mock_text, language="en", latency_ms=0.0, segments=[])
 
-    # ── Real ASR ──────────────────────────────────────────────────────────
+    if _backend is None:
+        raise HTTPException(503, f"ASR backend '{ASR_BACKEND}' chưa sẵn sàng. Kiểm tra log.")
+
+    # ── Real ASR ──────────────────────────────────────────────────────────────
     try:
         audio_np = np.frombuffer(base64.b64decode(req.audio_b64), dtype=np.float32)
 
-        segments_gen, info = _model.transcribe(
-            audio_np,
-            language=req.language if req.language != "auto" else None,
+        print(f'audio đã được đi vào ASR Orchestrator, độ dài: {len(audio_np)} samples', flush=True)
+        result = _backend.transcribe(
+            audio_np=audio_np,
+            language=req.language,
+            sample_rate=req.sample_rate,
             beam_size=req.beam_size,
             vad_filter=req.vad_filter,
-            vad_parameters={"min_silence_duration_ms": 250},
-            condition_on_previous_text=False,
-            initial_prompt="Đây là nội dung cuộc họp: alo, xin chào, vâng."
         )
 
-        segs = list(segments_gen)
-        valid_segs = [s for s in segs if s.no_speech_prob < 0.8]
-        text = " ".join(s.text.strip() for s in valid_segs).strip()
-
-        # Filter common YouTube hallucinations
-        lower_t = text.lower()
-        if "subscribe" in lower_t or "đăng ký kênh" in lower_t or "ghiền mì gõ" in lower_t:
-            text = ""
-
-        ms = (time.perf_counter() - t0) * 1000
-        logger.debug(f"ASR [{info.language}] {ms:.0f}ms: {text[:60]}")
+        print(f"🎙️ [{_backend.name}] TEXT: '{result.text}'", flush=True)
 
         return TranscribeResp(
-            text=text,
-            language=info.language,
-            latency_ms=round(ms, 1),
-            segments=[{"start": s.start, "end": s.end, "text": s.text} for s in segs],
+            text=result.text,
+            language=result.language,
+            latency_ms=result.latency_ms,
+            segments=result.segments,
         )
+
     except Exception as e:
         logger.error(f"ASR error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 
+@app.websocket("/stream")
+async def websocket_stream(websocket: WebSocket):
+    if _backend is None:
+        await websocket.accept()
+        await websocket.close(code=1011, reason="Backend not loaded")
+        return
+
+    await websocket.accept()
+    audio_buffer = bytearray()
+    
+    # Định nghĩa cấu hình
+    BYTES_PER_SEC = 16000 * 2  # 16kHz, 16-bit
+    CHUNK_SIZE = int(BYTES_PER_SEC * 0.5) # Cứ 0.5s dịch 1 lần
+    
+    last_processed_len = 0
+
+    try:
+        while True:
+            data = await websocket.receive()
+            
+            # 1. Nhận gói Byte (Âm thanh thô từ Client)
+            if "bytes" in data:
+                audio_buffer.extend(data["bytes"])
+                
+                # Nếu đã có thêm 0.5s âm thanh so với lần dịch cuối
+                if len(audio_buffer) - last_processed_len >= CHUNK_SIZE:
+                    last_processed_len = len(audio_buffer)
+                    
+                    # Dịch toàn bộ bộ đệm từ đầu câu tới giờ
+                    audio_np = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+                    try:
+                        result = _backend.transcribe(audio_np, language="auto", vad_filter=False)
+                        # Trả về kết quả tạm thời (Nhả từng chữ)
+                        await websocket.send_json({
+                            "type": "partial",
+                            "text": result.text,
+                            "latency_ms": result.latency_ms
+                        })
+                    except Exception as e:
+                        logger.error(f"[WS Partial Error]: {e}")
+
+            # 2. Nhận gói Text (Các lệnh điểu khiển như Chốt câu - Endpoint)
+            elif "text" in data:
+                try:
+                    cmd = json.loads(data["text"])
+                    if cmd.get("event") == "endpoint":
+                        # Xử lý đoạn thừa cuối cùng (nếu có)
+                        if len(audio_buffer) > 0:
+                            audio_np = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+                            result = _backend.transcribe(audio_np, language="auto", vad_filter=False)
+                            await websocket.send_json({"type": "final", "text": result.text})
+                        else:
+                            await websocket.send_json({"type": "final", "text": ""})
+                        
+                        # Thiết lập lại chặng mới
+                        audio_buffer.clear()
+                        last_processed_len = 0
+                except json.JSONDecodeError:
+                    pass
+    except WebSocketDisconnect:
+        logger.info("[WebSocket] Client ngắt kết nối.")
+
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": MODEL_SIZE, "device": DEVICE}
+    return {
+        "status": "ok" if _backend is not None else "backend_not_loaded",
+        "backend": ASR_BACKEND,
+        "model": _backend.name if _backend else None,
+    }
 
 
 if __name__ == "__main__":

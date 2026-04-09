@@ -103,13 +103,27 @@ async def ws_audio_endpoint(
     await connection_manager.connect(websocket, session_id, direction)
     logger.info(f"WS connected: session={session_id[:8]} direction={direction}")
 
+    queue = asyncio.Queue()
+
+    async def _worker():
+        while True:
+            frame = await queue.get()
+            if frame is None:
+                break
+            try:
+                # Await sequentially to avoid out-of-order execution and overwhelming the backend
+                await pipeline.process(frame, session_id, direction, websocket)
+            except Exception as e:
+                logger.error(f"Pipeline error in worker: {e}")
+            finally:
+                queue.task_done()
+
+    worker_task = asyncio.create_task(_worker())
+
     try:
         while True:
             frame = await websocket.receive_json()
-            # Non-blocking: each chunk processed in its own task
-            asyncio.create_task(
-                pipeline.process(frame, session_id, direction, websocket)
-            )
+            await queue.put(frame)
     except WebSocketDisconnect:
         logger.info(f"WS disconnected: session={session_id[:8]}")
     except Exception as e:
@@ -119,6 +133,9 @@ async def ws_audio_endpoint(
         except Exception:
             pass
     finally:
+        await queue.put(None) # Signal worker to stop
+        # Optionally await worker_task completion, or just let it die.
+        # await worker_task
         connection_manager.disconnect(websocket, session_id)
 
 

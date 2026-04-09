@@ -3,7 +3,7 @@
 # Inspired by Vexa's Makefile (make all / make up / make logs)
 # ============================================================
 
-.PHONY: all env build up down logs health download-models clean
+.PHONY: all env build up down logs health download-models clean local-build local-up
 
 ## Full setup: env → build → up (run once on fresh server)
 all: env build up
@@ -35,6 +35,18 @@ up:
 	@echo "⏳ Waiting for services to be healthy..."
 	@sleep 5
 	@$(MAKE) health
+
+## Local-specific: build and up using docker-compose.local.yml (Disable Agent/Vision)
+local-build:
+	docker compose -f docker-compose.local.yml build --parallel
+
+local-up:
+	docker compose -f docker-compose.local.yml up -d
+	@echo "⏳ Waiting for local services to be healthy..."
+	@sleep 5
+	@$(MAKE) health
+
+
 
 ## Stop all services
 down:

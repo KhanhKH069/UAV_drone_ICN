@@ -14,6 +14,7 @@ volumes:
   postgres-data:
   redis-data:
 
+
 services:
   api-gateway:
     build:
@@ -38,14 +39,14 @@ services:
       - whisperlive
       - translation-service
       - tts-service
-      - vision-service
-      - agent-service
+      #      - vision-service
+      #      - agent-service
       - transcription-collector
       - redis
-    networks: [paraline-net]
+    networks: [ paraline-net ]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8056/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8056/health" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -58,14 +59,26 @@ services:
     volumes:
       - models-cache:/models
     environment:
+      - ASR_BACKEND=${ASR_BACKEND:-faster_whisper}
+      - QWEN_ASR_MODEL=${QWEN_ASR_MODEL:-Qwen/Qwen3-ASR-0.6B}
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
-      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - MODEL_CACHE_DIR=/models/whisper
-    networks: [paraline-net]
+    init: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    ports:
+      - "8001:8001"
+    networks: [ paraline-net ]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
       interval: 60s
       timeout: 10s
       retries: 5
@@ -79,12 +92,21 @@ services:
     volumes:
       - models-cache:/models
     environment:
-      - NLLB_MODEL=${NLLB_MODEL:-facebook/nllb-200-distilled-600M}
+      - NLLB_MODEL=facebook/nllb-200-distilled-600M
       - MODEL_CACHE_DIR=/models/nllb
-    networks: [paraline-net]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    ports:
+      - "8002:8002"
+    networks: [ paraline-net ]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
       interval: 60s
       start_period: 90s
 
@@ -96,28 +118,30 @@ services:
     volumes:
       - models-cache:/models
     environment:
-      - PIPER_VOICE=${PIPER_VOICE:-vi_VN-vivos-medium}
+      - PIPER_VOICE=vi_VN-vivos-medium
       - MODEL_CACHE_DIR=/models/piper
       - SAMPLE_RATE=22050
-    networks: [paraline-net]
+    ports:
+      - "8003:8003"
+    networks: [ paraline-net ]
     restart: unless-stopped
 
-  vision-service:
-    build:
-      context: ./services/vision-service
-      dockerfile: Dockerfile
-    container_name: paraline-vision
-    volumes:
-      - models-cache:/models
-    environment:
-      - OCR_LANG=${OCR_LANG:-japan}
-      - INPAINT_ENGINE=${INPAINT_ENGINE:-opencv}
-      - TRANSLATION_URL=http://translation-service:8002
-      - MODEL_CACHE_DIR=/models
-      - FONT_PATH=/models/fonts/NotoSansCJK-Regular.ttc
-    depends_on: [translation-service]
-    networks: [paraline-net]
-    restart: unless-stopped
+  #  vision-service:
+  #    build:
+  #      context: ./services/vision-service
+  #      dockerfile: Dockerfile
+  #    container_name: paraline-vision
+  #    volumes:
+  #      - models-cache:/models
+  #    environment:
+  #      - OCR_LANG=${OCR_LANG:-japan}
+  #      - INPAINT_ENGINE=${INPAINT_ENGINE:-opencv}
+  #      - TRANSLATION_URL=http://translation-service:8002
+  #      - MODEL_CACHE_DIR=/models
+  #      - FONT_PATH=/models/fonts/NotoSansCJK-Regular.ttc
+  #    depends_on: [translation-service]
+  #    networks: [paraline-net]
+  #    restart: unless-stopped
 
   transcription-collector:
     build:
@@ -127,30 +151,30 @@ services:
     environment:
       - DATABASE_URL=postgresql://paraline:${DB_PASSWORD:-paraline}@postgres:5432/paraline
       - REDIS_URL=redis://redis:6379
-    depends_on: [postgres, redis]
-    networks: [paraline-net]
+    depends_on: [ postgres, redis ]
+    networks: [ paraline-net ]
     restart: unless-stopped
 
-  agent-service:
-    build:
-      context: ./services/agent-service
-      dockerfile: Dockerfile
-    container_name: paraline-agent
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - LLM_MODEL=${LLM_MODEL:-llama3:8b}
-      - COLLECTOR_URL=http://transcription-collector:8006
-    depends_on: [ollama, transcription-collector]
-    networks: [paraline-net]
-    restart: unless-stopped
+  #  agent-service:
+  #    build:
+  #      context: ./services/agent-service
+  #      dockerfile: Dockerfile
+  #    container_name: paraline-agent
+  #    environment:
+  #      - OLLAMA_HOST=http://ollama:11434
+  #      - LLM_MODEL=${LLM_MODEL:-llama3:8b}
+  #      - COLLECTOR_URL=http://transcription-collector:8006
+  #    depends_on: [ollama, transcription-collector]
+  #    networks: [paraline-net]
+  #    restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: paraline-ollama
-    volumes:
-      - models-cache:/root/.ollama
-    networks: [paraline-net]
-    restart: unless-stopped
+  #  ollama:
+  #    image: ollama/ollama:latest
+  #    container_name: paraline-ollama
+  #    volumes:
+  #      - models-cache:/root/.ollama
+  #    networks: [paraline-net]
+  #    restart: unless-stopped
 
   postgres:
     image: postgres:15-alpine
@@ -162,7 +186,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./services/database/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks: [paraline-net]
+    networks: [ paraline-net ]
     restart: unless-stopped
 
   redis:
@@ -170,6 +194,5 @@ services:
     container_name: paraline-redis
     volumes:
       - redis-data:/data
-    networks: [paraline-net]
+    networks: [ paraline-net ]
     restart: unless-stopped
-

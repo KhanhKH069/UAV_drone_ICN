@@ -1,6 +1,7 @@
 # services/whisperlive-wrapper/Dockerfile
-# CPU-only image: do not pull NVIDIA CUDA layers.
-FROM python:3.11-slim
+# GPU image để Qwen3-ASR chạy được trên CUDA
+# (Faster Whisper cũng chạy được trên image này)
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -10,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
 EXPOSE 8001

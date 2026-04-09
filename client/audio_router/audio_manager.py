@@ -1,14 +1,13 @@
 """
 client/audio_router/audio_manager.py
-VB-Audio Virtual Cable routing.
+VB-Audio Virtual Cable routing - Optimized for Real-time Speech-to-Text.
 
-Inbound:  Virtual Speaker (Teams Audio Out) → capture PCM → send to server
-Outbound: Real Microphone → capture PCM → send to server
-Playback: Receive TTS WAV from server → play to Real Headphone
+Inbound:  Virtual Speaker (Meet Audio Out) → InboundAudioManager
+            → Silero VAD → Spectral Subtraction → Normalize → Whisper
+Playback: Receive TTS WAV from server → decode → non-blocking play to Real Headphone
 
-Requires: pip install sounddevice
-Hardware: VB-Audio Virtual Cable installed on Windows
-          https://vb-audio.com/Cable/
+Lưu ý: Outbound (microphone) đã được tách sang OutboundAudioManager riêng.
+        File này chỉ quản lý Inbound + Playback.
 """
 import base64
 import io
@@ -16,246 +15,177 @@ import logging
 import os
 import threading
 import wave
-from queue import Queue, Empty
+import queue
+import time
 from typing import Callable, Optional
 
 import numpy as np
 import sounddevice as sd
 
+# Import InboundAudioManager — pipeline đầy đủ cho Virtual Cable
+from .inbound import InboundAudioManager
+
 logger = logging.getLogger("paraline.audio")
 
 SAMPLE_RATE = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
-CHUNK_MS    = int(os.getenv("AUDIO_CHUNK_MS",    "500"))
-CHUNK_SAMP  = SAMPLE_RATE * CHUNK_MS // 1000
-VIRTUAL_SPK = os.getenv("VIRTUAL_SPEAKER_NAME",  "CABLE Output")
 
 
 class AudioManager:
+    """
+    Lớp điều phối âm thanh cấp cao.
+
+    Trách nhiệm:
+      - Khởi động / dừng InboundAudioManager (thu + xử lý từ Virtual Cable)
+      - Quản lý Playback stream (phát TTS ra loa)
+
+    Không xử lý audio trực tiếp — toàn bộ logic nằm trong InboundAudioManager.
+    """
+
     def __init__(self):
-        self._running        = False
-        self._inbound_cb:  Optional[Callable] = None
-        self._outbound_cb: Optional[Callable] = None
-        self._playback_q   = Queue(maxsize=30)
-        self._playback_thr: Optional[threading.Thread] = None
+        self._running = False
 
-        # Buffers for VAD accumulation
-        self._in_buf = []
-        self._in_hist = []
-        self._in_silence = 0
+        # Delegate inbound sang InboundAudioManager
+        self._inbound = InboundAudioManager()
 
-        self._out_buf = []
-        self._out_hist = []
-        self._out_silence = 0
+        # Playback
+        self._playback_q      = queue.Queue(maxsize=0)   # vô hạn — không bao giờ drop TTS
+        self._playback_buffer = np.zeros(0, dtype=np.float32)
+        self._playback_lock   = threading.Lock()
+
+        self._playback_stream: Optional[sd.OutputStream] = None
+        self._playback_thread: Optional[threading.Thread] = None
 
     # ─────────────────────────────────────────────
     # Start / Stop
     # ─────────────────────────────────────────────
 
-    def start(self, inbound_cb: Callable, outbound_cb: Callable):
+    def start(self, inbound_cb: Callable[[str], None], inbound_device: Optional[str] = None):
         """
-        inbound_cb(audio_b64: str)  — called with each 500ms chunk from Virtual Speaker
-        outbound_cb(audio_b64: str) — called with each 500ms chunk from Real Mic
+        Khởi động toàn bộ pipeline.
+        inbound_cb(b64_audio): gọi mỗi khi có câu hoàn chỉnh từ Meet.
+        inbound_device: tên thiết bị input (override VIRTUAL_SPEAKER_NAME trong .env).
         """
-        self._inbound_cb  = inbound_cb
-        self._outbound_cb = outbound_cb
-        self._running     = True
+        self._running = True
 
-        virtual_spk_idx = self._find_device(VIRTUAL_SPK, input=True)
-        real_mic_idx    = sd.default.device[0]
+        out_device_idx = sd.default.device[1]
+        print(f"\n[AUDIO] Khởi động AudioManager...")
+        print(f"[AUDIO] Playback device: Loa mặc định [idx: {out_device_idx}]\n")
 
-        logger.info(f"Inbound  device: [{virtual_spk_idx}] {VIRTUAL_SPK}")
-        logger.info(f"Outbound device: [{real_mic_idx}] (default mic)")
+        # ── Khởi động InboundAudioManager ────────────────────
+        self._inbound.start(callback=inbound_cb, device_name=inbound_device)
 
-        # ── Inbound stream ────────────────────────────────────
-        if virtual_spk_idx >= 0:
-            self._inbound_stream = sd.InputStream(
-                device=virtual_spk_idx,
+        # ── Playback stream (non-blocking) ───────────────────
+        if out_device_idx is not None and out_device_idx >= 0:
+            self._playback_stream = sd.OutputStream(
+                device=out_device_idx,
                 samplerate=SAMPLE_RATE,
                 channels=1,
                 dtype="float32",
-                blocksize=CHUNK_SAMP,
-                callback=self._inbound_audio_cb,
+                callback=self._playback_stream_cb,
             )
-            self._inbound_stream.start()
+            self._playback_stream.start()
+            logger.info(f"[AUDIO] Playback stream started: device [{out_device_idx}]")
         else:
-            logger.warning("⚠️ No Virtual Cable found. Mocking inbound audio from 'mock_en.wav' for testing!")
-            self._mock_inbound_thr = threading.Thread(target=self._mock_inbound_worker, daemon=True)
-            self._mock_inbound_thr.start()
+            logger.error("[AUDIO] Không tìm thấy output device — Playback bị tắt")
 
-        # ── Outbound stream ───────────────────────────────────
-        if real_mic_idx is not None and real_mic_idx >= 0:
-            self._outbound_stream = sd.InputStream(
-                device=real_mic_idx,
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype="float32",
-                blocksize=CHUNK_SAMP,
-                callback=self._outbound_audio_cb,
-            )
-            self._outbound_stream.start()
-        else:
-            logger.error("⚠️ No valid default mic! Outbound audio disabled.")
+        # ── Playback decoder worker ───────────────────────────
+        self._playback_thread = threading.Thread(
+            target=self._playback_worker,
+            name="PlaybackDecoder",
+            daemon=True,
+        )
+        self._playback_thread.start()
 
-        # ── Playback thread ───────────────────────────────────
-        self._playback_thr = threading.Thread(target=self._playback_worker, daemon=True)
-        self._playback_thr.start()
-
-        logger.info("✅ Audio streams started")
+        logger.info("[AUDIO] AudioManager started")
 
     def stop(self):
         self._running = False
-        if hasattr(self, "_inbound_stream"):
-            self._inbound_stream.stop()
-        if hasattr(self, "_outbound_stream"):
-            self._outbound_stream.stop()
-        logger.info("Audio streams stopped")
+
+        # Dừng inbound
+        self._inbound.stop()
+
+        # Dừng playback stream
+        if self._playback_stream:
+            self._playback_stream.stop()
+            self._playback_stream.close()
+            self._playback_stream = None
+
+        # Xoá playback buffer
+        with self._playback_lock:
+            self._playback_buffer = np.zeros(0, dtype=np.float32)
+
+        logger.info("[AUDIO] AudioManager stopped")
+
+    # ─────────────────────────────────────────────
+    # Playback API
+    # ─────────────────────────────────────────────
 
     def play_tts(self, audio_b64: str):
-        """Queue TTS audio for playback on Real Headphone."""
-        try:
-            self._playback_q.put_nowait(audio_b64)
-        except Exception:
-            logger.debug("Playback queue full, dropping TTS chunk")
-
-    def _mock_inbound_worker(self):
         """
-        Generates synthetic (non-silent) sine wave audio chunks and feeds them
-        into the inbound VAD accumulator exactly as if a Virtual Cable were present.
-        Whisper receives real PCM data; MOCK_TRANSCRIPTION_TEXT in the server env
-        makes it bypass ASR and return a predetermined text for translation.
+        Nhận TTS audio (base64 WAV) từ server và đưa vào hàng đợi phát.
+        Non-blocking — trả về ngay lập tức.
         """
-        import time
-
-        MOCK_TEXTS = [
-            "Hello everyone, today we will discuss the project timeline.",
-            "The development team has finished the first phase.",
-            "We need to review the requirements before the next sprint.",
-            "Please share your feedback on the current design proposal.",
-            "The meeting will wrap up with a summary of action items.",
-        ]
-
-        logger.info("🎵 Starting sine-wave mock inbound audio...")
-        time.sleep(2)  # Brief delay so UI is ready
-
-        chunk = SAMPLE_RATE // 2  # 500ms per chunk
-        t_idx = 0
-
-        for phrase in MOCK_TEXTS:
-            if not self._running:
-                break
-
-            # Generate a simple 440Hz sine wave — non-silent so VAD passes it
-            t = np.linspace(t_idx / SAMPLE_RATE, (t_idx + chunk) / SAMPLE_RATE, chunk, endpoint=False)
-            sine = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32).reshape(-1, 1)
-            t_idx += chunk
-
-            logger.info(f"[mock] sending phrase: {phrase[:40]}...")
-
-            # Feed through exactly the same VAD accumulator as real audio
-            # We send 6 speech chunks then 2 silence chunks to trigger flush
-            for _ in range(6):
-                self._inbound_audio_cb(sine, len(sine), None, None)
-                time.sleep(0.5)
-
-            # Two silence chunks → triggers flush in VAD accumulator
-            silence = np.zeros((chunk, 1), dtype=np.float32)
-            for _ in range(2):
-                self._inbound_audio_cb(silence, len(silence), None, None)
-                time.sleep(0.5)
-
-            # Pause between sentences
-            time.sleep(1.5)
-
-        logger.info("🏁 Mock inbound audio finished.")
-
-
-
-    def list_devices(self):
-        """Print all audio devices — helper for initial setup."""
-        for i, d in enumerate(sd.query_devices()):
-            print(f"[{i:2d}] {'IN' if d['max_input_channels'] > 0 else '  '} "
-                  f"{'OUT' if d['max_output_channels'] > 0 else '   '} {d['name']}")
+        self._playback_q.put_nowait(audio_b64)
 
     # ─────────────────────────────────────────────
-    # Stream Callbacks (called from sounddevice thread)
+    # Playback Stream Callback — hardware level
     # ─────────────────────────────────────────────
 
-    def _inbound_audio_cb(self, indata, frames, time_info, status):
-        if not self._running:
-            return
-        rms = np.sqrt(np.mean(indata**2))
-        is_silence = rms < 0.0005   # VAD: silence threshold (lowered for Virtual Cable)
-        
-        if is_silence:
-            self._in_silence += 1
-            if len(self._in_buf) > 0 and self._in_silence >= 1:
-                full = np.concatenate(self._in_buf)
-                self._inbound_cb(base64.b64encode(full.tobytes()).decode())
-                self._in_buf.clear()
+    def _playback_stream_cb(self, outdata, frames, time_info, status):
+        """
+        Callback của sounddevice — gọi liên tục bởi hardware.
+        Chỉ kéo dữ liệu từ buffer ra loa, không làm gì khác.
+        """
+        with self._playback_lock:
+            available = len(self._playback_buffer)
+            if available >= frames:
+                outdata[:, 0] = self._playback_buffer[:frames]
+                self._playback_buffer = self._playback_buffer[frames:]
+            elif available > 0:
+                # Còn data nhưng không đủ frames: xả nốt, phần còn lại im lặng
+                outdata[:available, 0] = self._playback_buffer
+                outdata[available:, 0] = 0
+                self._playback_buffer = np.zeros(0, dtype=np.float32)
             else:
-                self._in_hist = [indata.copy()]
-        else:
-            self._in_silence = 0
-            if not self._in_buf and self._in_hist:
-                self._in_buf.extend(self._in_hist)
-            self._in_buf.append(indata.copy())
-            if len(self._in_buf) >= 10:  # max 5 seconds
-                full = np.concatenate(self._in_buf)
-                self._inbound_cb(base64.b64encode(full.tobytes()).decode())
-                self._in_buf.clear()
-                self._in_hist.clear()
-
-    def _outbound_audio_cb(self, indata, frames, time_info, status):
-        if not self._running:
-            return
-        rms = np.sqrt(np.mean(indata**2))
-        is_silence = rms < 0.0015   # VAD: silence threshold for Real Mic
-        
-        if is_silence:
-            self._out_silence += 1
-            if len(self._out_buf) > 0 and self._out_silence >= 1:
-                full = np.concatenate(self._out_buf)
-                self._outbound_cb(base64.b64encode(full.tobytes()).decode())
-                self._out_buf.clear()
-            else:
-                self._out_hist = [indata.copy()]
-        else:
-            self._out_silence = 0
-            if not self._out_buf and self._out_hist:
-                self._out_buf.extend(self._out_hist)
-            self._out_buf.append(indata.copy())
-            if len(self._out_buf) >= 10:  # max 5 seconds
-                full = np.concatenate(self._out_buf)
-                self._outbound_cb(base64.b64encode(full.tobytes()).decode())
-                self._out_buf.clear()
-                self._out_hist.clear()
+                outdata.fill(0)
 
     # ─────────────────────────────────────────────
-    # Playback
+    # Playback Decoder Worker
     # ─────────────────────────────────────────────
 
     def _playback_worker(self):
-        """Thread: play TTS WAV audio to Real Headphone."""
-        out_device = sd.default.device[1]
+        """
+        Worker giải mã Base64 WAV → float32 PCM và append vào playback buffer.
+        Chạy trong thread riêng để không block main thread.
+        """
         while self._running:
             try:
                 audio_b64 = self._playback_q.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
                 wav_bytes = base64.b64decode(audio_b64)
                 with wave.open(io.BytesIO(wav_bytes)) as wf:
-                    pcm = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
+                    pcm       = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
                     audio_f32 = pcm.astype(np.float32) / 32768.0
-                    sr = wf.getframerate()
-                sd.play(audio_f32, samplerate=sr, device=out_device, blocking=True)
-            except Empty:
-                continue
+
+                with self._playback_lock:
+                    self._playback_buffer = np.concatenate(
+                        (self._playback_buffer, audio_f32)
+                    )
             except Exception as e:
-                logger.error(f"Playback error: {e}")
+                logger.error(f"[AUDIO] Playback decode error: {e}")
+
+    # ─────────────────────────────────────────────
+    # Utilities
+    # ─────────────────────────────────────────────
 
     @staticmethod
-    def _find_device(name: str, input: bool = True) -> int:
-        key = "max_input_channels" if input else "max_output_channels"
-        for i, d in enumerate(sd.query_devices()):
-            if name.lower() in d["name"].lower() and d[key] > 0:
-                return i
-        logger.warning(f"Device '{name}' not found, using default")
-        return sd.default.device[0] if input else sd.default.device[1]
+    def list_devices():
+        """In danh sách thiết bị audio Inbound (có âm thanh)."""
+        print("\n--- Danh Sách Thiết Bị Inbound ---")
+        for i, dev in enumerate(sd.query_devices()):
+            if dev.get('max_input_channels', 0) > 0:
+                print(f"🔊 {i} - {dev['name']} ({dev['max_input_channels']} in)")
+        print("----------------------------------\n")

@@ -1,5 +1,16 @@
 fastapi==0.111.0
 uvicorn==0.30.1
-faster-whisper==1.0.3
 numpy==1.26.4
 requests==2.31.0
+
+# ── ASR Backends (chọn bằng ASR_BACKEND env var trong .env) ──────────────────
+# ASR_BACKEND=faster_whisper  → dùng dòng này
+faster-whisper==1.0.3
+
+# ASR_BACKEND=qwen3_asr       → dùng dòng này
+qwen-asr>=0.0.1
+
+# ASR_BACKEND=sensevoice      → dùng dòng này
+funasr
+modelscope
+torchaudio
