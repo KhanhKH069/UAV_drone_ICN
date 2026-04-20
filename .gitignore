@@ -1,7 +1,7 @@
 # Paraline MSAgent .gitignore
 
 # Environment & secrets
-.env
+
 *.env.local
 
 # AI Models (large files — download separately)
