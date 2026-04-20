@@ -281,6 +281,7 @@ class ParalineWSClient:
         on_subtitle: Optional[Callable[[str, str, float], None]] = None,
         on_inbound_audio: Optional[Callable[[str], None]] = None,
         on_outbound_text: Optional[Callable[[str, str], None]] = None,
+        on_listening: Optional[Callable[[str], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
     ):
         self.base_url = server_ws_url
@@ -291,6 +292,7 @@ class ParalineWSClient:
         self._on_subtitle = on_subtitle
         self._on_inbound_audio = on_inbound_audio
         self._on_outbound_text = on_outbound_text
+        self._on_listening = on_listening
         self._on_error = on_error
 
         self._running = False
@@ -327,9 +329,9 @@ class ParalineWSClient:
         for task in asyncio.all_tasks(self._loop):
             task.cancel()
 
-    def send_inbound_chunk(self, pcm_b64: str):
+    def send_inbound_chunk(self, pcm_b64: str, is_final: bool = True):
         self._loop.call_soon_threadsafe(
-            lambda: self._inbound_q.put_nowait(pcm_b64) if not self._inbound_q.full() else None
+            lambda: self._inbound_q.put_nowait((pcm_b64, is_final)) if not self._inbound_q.full() else None
         )
 
     def send_outbound_chunk(self, pcm_b64: str):
@@ -378,7 +380,11 @@ class ParalineWSClient:
         idx = 0
         while self._running:
             try:
-                data = await asyncio.wait_for(queue.get(), timeout=0.5)
+                msg_data = await asyncio.wait_for(queue.get(), timeout=0.5)
+                if isinstance(msg_data, tuple):
+                    data, is_final = msg_data
+                else:
+                    data, is_final = msg_data, True
                 
                 # Fetch language dynamically
                 if direction == "inbound":
@@ -393,6 +399,7 @@ class ParalineWSClient:
                     "data": data,
                     "src_lang": src,
                     "tgt_lang": tgt,
+                    "is_final": is_final,
                     "session_id": self.session_id,
                     "chunk_index": idx,
                 }))
@@ -407,6 +414,12 @@ class ParalineWSClient:
                 t = data.get("type", "")
 
                 if t == "subtitle":
+                    continue
+
+                elif t == "listening":
+                    text = data.get("text", "")
+                    if self._on_listening:
+                        self._on_listening(text)
                     continue
 
                 # =========================

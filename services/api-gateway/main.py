@@ -112,7 +112,8 @@ async def ws_audio_endpoint(
                 break
             try:
                 # Await sequentially to avoid out-of-order execution and overwhelming the backend
-                await pipeline.process(frame, session_id, direction, websocket)
+                is_final = frame.get("is_final", True)
+                await pipeline.process(frame, session_id, direction, websocket, is_final=is_final)
             except Exception as e:
                 logger.error(f"Pipeline error in worker: {e}")
             finally:

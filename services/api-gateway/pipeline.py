@@ -30,7 +30,10 @@ _client = httpx.AsyncClient(timeout=300.0, limits=httpx.Limits(max_connections=5
 
 
 class AudioPipeline:
-    """Stateless pipeline — all state lives in session-manager/DB."""
+    """Orchestrates audio processing. Now with stateful partial-result deduplication."""
+
+    def __init__(self):
+        self._last_listening_text = {} # {session_id: str}
 
     async def process(
         self,
@@ -38,6 +41,7 @@ class AudioPipeline:
         session_id: str,
         direction: str,
         ws: WebSocket,
+        is_final: bool = True,
     ):
         """Route audio frame through the appropriate pipeline."""
         t0 = time.perf_counter()
@@ -66,12 +70,28 @@ class AudioPipeline:
             print(f"🎙️ [QWEN3-ASR RAW TEXT]: '{original_text}'", flush=True)
             # -------------------
             
-            if not original_text:
-                return  # Silence / no speech detected
+            # --- HYBRID STREAMING LOGIC ---
+            if not is_final:
+                # Deduplication: Skip if text hasn't changed
+                last_text = self._last_listening_text.get(session_id, "")
+                if original_text == last_text:
+                    return
 
-            # Send immediate subtitle (original, pre-translation)
-            # — gives user instant feedback that audio is received
-            await ws.send_json({"type": "listening", "text": f"[{src_lang[:2].upper()}] {original_text[:60]}"})
+                self._last_listening_text[session_id] = original_text
+
+                # Intermediary ASR result
+                await ws.send_json({
+                    "type": "listening",
+                    "text": f"{original_text}"
+                })
+                return
+
+            # Final ASR result - Proceed to translation
+            self._last_listening_text.pop(session_id, None) # Clear on final
+            await ws.send_json({
+                "type": "listening",
+                "text": f"[{src_lang[:2].upper()}] {original_text}"
+            })
 
             # ── Step 2: Translation (NLLB) ── [ĐÃ TẠM TẮT ĐỂ TRẢ NHANH KẾT QUẢ WHISPER] ──
             t_nllb_start = time.perf_counter()

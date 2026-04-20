@@ -59,7 +59,7 @@ class AudioManager:
     # Start / Stop
     # ─────────────────────────────────────────────
 
-    def start(self, inbound_cb: Callable[[str], None], inbound_device: Optional[str] = None):
+    def start(self, inbound_cb: Callable[[str, bool], None], inbound_device: Optional[str] = None):
         """
         Khởi động toàn bộ pipeline.
         inbound_cb(b64_audio): gọi mỗi khi có câu hoàn chỉnh từ Meet.

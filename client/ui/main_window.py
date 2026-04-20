@@ -38,6 +38,7 @@ class ParalineMainWindow(QMainWindow):
     sig_meeting_started = pyqtSignal(str)
     sig_meeting_ended   = pyqtSignal()
     sig_mock_result     = pyqtSignal(list)
+    sig_listening       = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -287,6 +288,7 @@ class ParalineMainWindow(QMainWindow):
             on_subtitle=lambda src, dst, ms: self.sig_subtitle.emit(src, dst, ms),
             on_inbound_audio=lambda b64: self.sig_tts_audio.emit(b64),
             on_outbound_text=lambda o, t: self.sig_outbound_text.emit(o, t),
+            on_listening=lambda text: self.sig_listening.emit(text),
         )
 
         if getattr(self.ws_client, "inbound_only", False):
@@ -339,7 +341,11 @@ class ParalineMainWindow(QMainWindow):
     # ── Signal handlers ───────────────────────────────────────────────────────
 
     def _on_subtitle(self, src, dst, latency: float):
+        self._frame_trans.update_live_text("")  # Clear live area on final result
         self._frame_trans.add_trans_item(src, dst, latency)
+
+    def _on_listening(self, text: str):
+        self._frame_trans.update_live_text(text)
 
     def _on_outbound_text(self, original: str, translated: str):
         if self.ws_client and getattr(self.ws_client, "inbound_only", False):
@@ -454,6 +460,7 @@ class ParalineMainWindow(QMainWindow):
         self.sig_meeting_started.connect(self._on_meeting_started)
         self.sig_meeting_ended.connect(self._on_meeting_ended)
         self.sig_mock_result.connect(self._on_mock_result)
+        self.sig_listening.connect(self._on_listening)
         # Chat frame: người dùng gửi text (từ gõ phím hoặc giọng nói)
         self._frame_chat.send_requested.connect(self._on_chat_send)
 
