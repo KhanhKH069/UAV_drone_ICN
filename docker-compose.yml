@@ -1,55 +1,61 @@
 version: "3.9"
 
 # ============================================================
-# Paraline MSAgent — Docker Compose
-# Vexa microservices pattern adapted for VMG_STAFF LAN
+# Paraline Drone Edge Server — Docker Compose
+# Tái sử dụng kiến trúc paraline-msagent cho UAV v2.0
+#
+# Services được kích hoạt:
+#   - api-gateway    (cổng giao tiếp với Raspberry Pi 5)
+#   - whisperlive    (STT: Faster-Whisper)
+#   - translation    (NLLB: dịch Việt→Anh cho lệnh tiếng Việt)
+#   - agent-service  (Ollama: phân loại intent 28 lệnh bay)
+#   - ollama         (LLM runtime: Llama3/Gemma3)
+#   - redis          (Queue bất đồng bộ nội bộ)
+#
+# Khởi động:
+#   docker-compose -f docker-compose.drone.yml up -d
 # ============================================================
 
 networks:
-  paraline-net:
+  drone-net:
     driver: bridge
 
 volumes:
-  models-cache: # Shared AI model files (Whisper, NLLB, Piper, OCR)
-  session-data:
-  postgres-data:
+  models-cache:
   redis-data:
 
 
 services:
 
   # ──────────────────────────────────────────────────────────
-  # API Gateway — Main entry point, WebSocket hub
-  # Vexa pattern: api-gateway (port 8056)
+  # API Gateway — Cổng WebSocket cho Raspberry Pi 5
+  # ws://host:8765/drone/stream  ← điểm kết nối chính
   # ──────────────────────────────────────────────────────────
   api-gateway:
     build:
       context: ./services/api-gateway
       dockerfile: Dockerfile
-    container_name: paraline-api-gateway
+    container_name: drone-api-gateway
     ports:
-      - "8056:8056" # REST API + Swagger docs
-      - "8765:8765" # WebSocket audio stream
+      - "8056:8056"   # REST API
+      - "8765:8765"   # WebSocket audio stream
     environment:
       - WHISPERLIVE_URL=http://whisperlive:8001
       - TRANSLATION_URL=http://translation-service:8002
-      - TTS_URL=http://tts-service:8003
-      - VISION_URL=http://vision-service:8004
       - AGENT_URL=http://agent-service:8005
-      - COLLECTOR_URL=http://transcription-collector:8006
       - REDIS_URL=redis://redis:6379
-      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
-      - CLIENT_API_KEY=${CLIENT_API_KEY}
+      - CLIENT_API_KEY=${CLIENT_API_KEY:-drone-secret}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Tắt các service không dùng cho Drone
+      - TTS_URL=
+      - VISION_URL=
+      - COLLECTOR_URL=
     depends_on:
       - whisperlive
       - translation-service
-      - tts-service
-      - vision-service
       - agent-service
-      - transcription-collector
       - redis
-    networks: [ paraline-net ]
+    networks: [ drone-net ]
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8056/health" ]
@@ -58,84 +64,43 @@ services:
       retries: 3
 
   # ──────────────────────────────────────────────────────────
-  # Admin API — Server management
-  # Vexa pattern: admin-api (port 8057)
-  # ──────────────────────────────────────────────────────────
-  admin-api:
-    build:
-      context: ./services/admin-api
-      dockerfile: Dockerfile
-    container_name: paraline-admin
-    ports:
-      - "8057:8057"
-    environment:
-      - DATABASE_URL=postgresql://paraline:${DB_PASSWORD:-paraline}@postgres:5432/paraline
-      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
-      - REDIS_URL=redis://redis:6379
-    depends_on: [ postgres, redis ]
-    networks: [ paraline-net ]
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # WhisperLive Wrapper — Faster-Whisper realtime STT
-  # Vexa pattern: WhisperLive service (port 8001)
+  # WhisperLive — STT nhận lệnh thoại từ Raspberry Pi 5
+  # Nhận audio 16kHz mono → trả về text lệnh bay
   # ──────────────────────────────────────────────────────────
   whisperlive:
     build:
       context: ./services/whisperlive-wrapper
       dockerfile: Dockerfile
-    container_name: paraline-whisperlive
+    container_name: drone-whisperlive
     ports:
       - "8001:8001"
     volumes:
       - models-cache:/models
     environment:
-      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
-      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
-      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-float16}
+      # Dùng tiny/small cho latency thấp (<300ms) — đủ cho lệnh ngắn
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - MODEL_CACHE_DIR=/models/whisper
-    networks: [ paraline-net ]
+    networks: [ drone-net ]
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
       interval: 60s
       timeout: 10s
       retries: 5
-      start_period: 60s # Whisper takes time to load
-
-  # ──────────────────────────────────────────────────────────
-  # Transcription Collector — Thu gom segments, lưu DB
-  # Vexa pattern: transcription-collector (port 8006)
-  # ──────────────────────────────────────────────────────────
-  transcription-collector:
-    build:
-      context: ./services/transcription-collector
-      dockerfile: Dockerfile
-    container_name: paraline-collector
-    ports:
-      - "8006:8006"
-    environment:
-      - DATABASE_URL=postgresql://paraline:${DB_PASSWORD:-paraline}@postgres:5432/paraline
-      - REDIS_URL=redis://redis:6379
-    depends_on: [ postgres, redis ]
-    networks: [ paraline-net ]
-    restart: unless-stopped
+      start_period: 60s
 
   # ──────────────────────────────────────────────────────────
   # Translation Service — NLLB-200
+  # Dịch lệnh tiếng Việt → tiếng Anh để Regex/LLM xử lý
+  # Có thể tắt nếu phi công chỉ ra lệnh bằng tiếng Anh
   # ──────────────────────────────────────────────────────────
   translation-service:
     build:
       context: ./services/translation-service
       dockerfile: Dockerfile
-    container_name: paraline-nllb
+    container_name: drone-nllb
     ports:
       - "8002:8002"
     volumes:
@@ -143,7 +108,7 @@ services:
     environment:
       - NLLB_MODEL=${NLLB_MODEL:-facebook/nllb-200-distilled-600M}
       - MODEL_CACHE_DIR=/models/nllb
-    networks: [ paraline-net ]
+    networks: [ drone-net ]
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
@@ -151,111 +116,54 @@ services:
       start_period: 90s
 
   # ──────────────────────────────────────────────────────────
-  # TTS Service — Piper TTS Vietnamese
-  # ──────────────────────────────────────────────────────────
-  tts-service:
-    build:
-      context: ./services/tts-service
-      dockerfile: Dockerfile
-    container_name: paraline-piper
-    ports:
-      - "8003:8003"
-    volumes:
-      - models-cache:/models
-    environment:
-      - PIPER_VOICE=${PIPER_VOICE:-vi_VN-vivos-medium}
-      - MODEL_CACHE_DIR=/models/piper
-      - SAMPLE_RATE=22050
-    networks: [ paraline-net ]
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Vision Service — PaddleOCR + OpenCV + Pillow
-  # Image translation pipeline (5 steps)
-  # ──────────────────────────────────────────────────────────
-  vision-service:
-    build:
-      context: ./services/vision-service
-      dockerfile: Dockerfile
-    container_name: paraline-vision
-    ports:
-      - "8004:8004"
-    volumes:
-      - models-cache:/models
-    environment:
-      - OCR_LANG=${OCR_LANG:-japan}
-      - INPAINT_ENGINE=${INPAINT_ENGINE:-opencv}
-      - TRANSLATION_URL=http://translation-service:8002
-      - MODEL_CACHE_DIR=/models
-      - FONT_PATH=/models/fonts/NotoSansCJK-Regular.ttc
-    depends_on: [ translation-service ]
-    networks: [ paraline-net ]
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Agent Service — LLM Meeting Summarizer
-  # Vexa pattern: MCP/agent (Ollama backend)
+  # Agent Service — Phân loại Intent bằng Ollama LLM
+  # POST /drone/classify  →  { intent, entities, confidence }
   # ──────────────────────────────────────────────────────────
   agent-service:
     build:
       context: ./services/agent-service
       dockerfile: Dockerfile
-    container_name: paraline-agent
+    container_name: drone-agent
     ports:
       - "8005:8005"
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - LLM_MODEL=${LLM_MODEL:-llama3:8b}
-      - COLLECTOR_URL=http://transcription-collector:8006
-    depends_on: [ ollama, transcription-collector ]
-    networks: [ paraline-net ]
+      - COLLECTOR_URL=  # Không dùng collector cho Drone
+    depends_on:
+      - ollama
+    networks: [ drone-net ]
     restart: unless-stopped
 
   # ──────────────────────────────────────────────────────────
-  # Ollama — Local LLM runtime
+  # Ollama — LLM runtime (Llama3 8B / Gemma3 9B)
+  # Chạy inference Intent Classification offline 100%
   # ──────────────────────────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
-    container_name: paraline-ollama
+    container_name: drone-ollama
+    ports:
+      - "11434:11434"
     volumes:
       - models-cache:/root/.ollama
-    networks: [ paraline-net ]
+    networks: [ drone-net ]
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
+    # Bỏ comment nếu có GPU NVIDIA:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [ gpu ]
 
   # ──────────────────────────────────────────────────────────
-  # PostgreSQL — Session, transcript, meeting minutes storage
-  # Vexa pattern: postgres backend
-  # ──────────────────────────────────────────────────────────
-  postgres:
-    image: postgres:15-alpine
-    container_name: paraline-postgres
-    ports:
-      - "5438:5432" # Vexa dev convention: expose on 5438
-    environment:
-      POSTGRES_USER: paraline
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-paraline}
-      POSTGRES_DB: paraline
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./services/database/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks: [ paraline-net ]
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Redis — Pub/Sub for realtime audio segments + caching
-  # Vexa pattern: redis for inter-service communication
+  # Redis — Message queue nội bộ
   # ──────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: paraline-redis
+    container_name: drone-redis
     volumes:
       - redis-data:/data
-    networks: [ paraline-net ]
+    networks: [ drone-net ]
     restart: unless-stopped
