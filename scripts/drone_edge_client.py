@@ -23,6 +23,7 @@ import logging
 import sys
 import time
 import threading
+from collections import deque
 
 import cv2
 import numpy as np
@@ -47,6 +48,7 @@ class DroneState:
         self.is_tracking = False
         self.target_class = "person" # Mặc định theo dõi người
         self.target_color = None
+        self.command_queue = deque()
 
 class PIDController:
     """Bộ điều khiển PID rời rạc (Discrete PID) theo Ziegler-Nichols."""
@@ -213,7 +215,24 @@ class UAVController:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Computer Vision (YOLOv8 + ByteTrack) & PID Tracking Loop
+# 3. Luồng Thực Thi Lệnh (Command Executor)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def command_executor_loop(state: DroneState, controller: UAVController):
+    """Liên tục đọc hàng đợi lệnh và thực thi tuần tự (chặn chờ lệnh bay xong)."""
+    logger.info("⚙️ Khởi động luồng Command Executor...")
+    while True:
+        if state.command_queue:
+            cmd = state.command_queue.popleft()
+            intent = cmd.get("intent")
+            entities = cmd.get("entities", {})
+            controller.execute_command(intent, entities, state)
+        else:
+            time.sleep(0.1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Computer Vision (YOLOv8 + ByteTrack) & PID Tracking Loop
 # ─────────────────────────────────────────────────────────────────────────────
 
 def vision_tracking_loop(state: DroneState, controller: UAVController):
@@ -294,6 +313,18 @@ def vision_tracking_loop(state: DroneState, controller: UAVController):
 
                     # 2. Đưa qua 3 bộ PID rời rạc
                     
+                    # --- ADAPTIVE PID (Gain Scheduling) ---
+                    # Điều chỉnh Kp của Pitch dựa trên độ lớn khung hình (mục tiêu ở quá gần hay quá xa)
+                    if bbox_h > 250:
+                        # Ở rất gần -> giảm giật cục
+                        pid_pitch.Kp = 0.15 
+                    elif bbox_h < 100:
+                        # Ở rất xa -> tăng tốc bám đuổi
+                        pid_pitch.Kp = 0.45
+                    else:
+                        # Khoảng cách lý tưởng
+                        pid_pitch.Kp = 0.30
+
                     # Yaw (xoay ngang)
                     raw_yaw = pid_yaw.compute(error_x)
                     # Chuyển đổi sang rad/s và giới hạn tốc độ xoay tối đa (Vd: 0.5 rad/s)
@@ -417,10 +448,18 @@ async def stream_audio_and_receive_commands(server_uri: str, lang: str, controll
                                 entities = msg.get("entities", {})
                                 raw_text = msg.get("raw_text")
                                 conf = msg.get("confidence")
-                                logger.info(f"🎯 Lệnh nhận được: '{raw_text}' -> Intent: {intent} (conf: {conf})")
+                                logger.info(f"🎯 Lệnh nhận được (single): '{raw_text}' -> Intent: {intent} (conf: {conf})")
+                                state.command_queue.clear()
+                                state.command_queue.append({"intent": intent, "entities": entities})
                                 
-                                # Truyền cả state để cập nhật cờ tracking
-                                controller.execute_command(intent, entities, state)
+                            elif msg_type == "command_list":
+                                commands = msg.get("commands", [])
+                                raw_text = msg.get("raw_text")
+                                logger.info(f"🎯 Lệnh nhận được (chuỗi {len(commands)} lệnh): '{raw_text}'")
+                                # Clear queue để hủy các lệnh cũ đang chờ (ưu tiên lệnh mới nhất)
+                                state.command_queue.clear()
+                                for c in commands:
+                                    state.command_queue.append(c)
                                 
                             elif msg_type == "unknown":
                                 logger.warning(f"❓ Lệnh không xác định: '{msg.get('raw_text', '')}'")
@@ -471,6 +510,14 @@ def main():
         daemon=True
     )
     vision_thread.start()
+
+    # Khởi động Luồng Command Executor
+    executor_thread = threading.Thread(
+        target=command_executor_loop,
+        args=(global_state, controller),
+        daemon=True
+    )
+    executor_thread.start()
 
     # URI Websocket
     uri = f"{args.server}?api_key={args.api_key}&drone_id={args.drone_id}&lang={args.lang}"

@@ -146,6 +146,19 @@ def _extract_entities(text: str, intent: str) -> dict:
     return entities
 
 
+def _split_compound_commands(text: str) -> list[str]:
+    """Cắt câu ghép thành các lệnh đơn dựa trên liên từ."""
+    # Các liên từ phổ biến tiếng Anh (đã dịch sang EN vì qua NLLB) và tiếng Việt fallback
+    parts = re.split(r'\b(and then|then|and|sau đó|rồi|và)\b', text, flags=re.IGNORECASE)
+    commands = []
+    for p in parts:
+        p = p.strip()
+        # Loại bỏ các từ nối
+        if p and p.lower() not in ["and then", "then", "and", "sau đó", "rồi", "và"]:
+            commands.append(p)
+    return commands
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # WebSocket Endpoint
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,29 +253,38 @@ async def drone_stream(
                         en_text = await _translate_to_en(raw_text)
                         logger.info(f"🌐 [Drone/{drone_id}] Translated: '{en_text}'")
 
-                    # Step 3: Regex Intent Classification (Tầng 1 — nhanh <10ms)
-                    intent, confidence = _regex_classify(en_text)
-                    entities = _extract_entities(en_text, intent) if intent else {}
+                    # Tách câu ghép thành danh sách lệnh đơn
+                    sub_commands = _split_compound_commands(en_text)
+                    command_list = []
 
-                    # Step 4: LLM Fallback nếu Regex không match
-                    if intent is None or confidence < 0.7:
-                        logger.info(f"🤖 [Drone/{drone_id}] Regex miss → LLM fallback for: '{en_text}'")
-                        intent, entities, confidence = await _llm_classify(en_text)
+                    for sub_text in sub_commands:
+                        # Step 3: Regex Intent Classification (Tầng 1 — nhanh <10ms)
+                        intent, confidence = _regex_classify(sub_text)
+                        entities = _extract_entities(sub_text, intent) if intent else {}
+
+                        # Step 4: LLM Fallback nếu Regex không match
+                        if intent is None or confidence < 0.7:
+                            logger.info(f"🤖 [Drone/{drone_id}] Regex miss → LLM fallback for: '{sub_text}'")
+                            intent, entities, confidence = await _llm_classify(sub_text)
+                        
+                        if intent:
+                            command_list.append({
+                                "intent": intent,
+                                "entities": entities,
+                                "confidence": round(confidence, 2)
+                            })
 
                     latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-                    if intent:
+                    if command_list:
                         logger.info(
-                            f"✅ [Drone/{drone_id}] COMMAND: intent={intent} "
-                            f"entities={entities} conf={confidence:.2f} latency={latency_ms}ms"
+                            f"✅ [Drone/{drone_id}] COMMANDS ({len(command_list)}): {command_list} latency={latency_ms}ms"
                         )
                         await websocket.send_json({
-                            "type":        "command",
-                            "intent":      intent,
-                            "entities":    entities,
+                            "type":        "command_list",
+                            "commands":    command_list,
                             "raw_text":    raw_text,
                             "en_text":     en_text,
-                            "confidence":  round(confidence, 2),
                             "latency_ms":  latency_ms,
                         })
                     else:
