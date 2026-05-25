@@ -1,0 +1,169 @@
+version: "3.9"
+
+# ============================================================
+# Paraline Drone Edge Server — Docker Compose
+# Tái sử dụng kiến trúc paraline-msagent cho UAV v2.0
+#
+# Services được kích hoạt:
+#   - api-gateway    (cổng giao tiếp với Raspberry Pi 5)
+#   - whisperlive    (STT: Faster-Whisper)
+#   - translation    (NLLB: dịch Việt→Anh cho lệnh tiếng Việt)
+#   - agent-service  (Ollama: phân loại intent 28 lệnh bay)
+#   - ollama         (LLM runtime: Llama3/Gemma3)
+#   - redis          (Queue bất đồng bộ nội bộ)
+#
+# Khởi động:
+#   docker-compose -f docker-compose.drone.yml up -d
+# ============================================================
+
+networks:
+  drone-net:
+    driver: bridge
+
+volumes:
+  models-cache:
+  redis-data:
+
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # API Gateway — Cổng WebSocket cho Raspberry Pi 5
+  # ws://host:8765/drone/stream  ← điểm kết nối chính
+  # ──────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: drone-api-gateway
+    ports:
+      - "8056:8056"   # REST API
+      - "8765:8765"   # WebSocket audio stream
+    environment:
+      - WHISPERLIVE_URL=http://whisperlive:8001
+      - TRANSLATION_URL=http://translation-service:8002
+      - AGENT_URL=http://agent-service:8005
+      - REDIS_URL=redis://redis:6379
+      - CLIENT_API_KEY=${CLIENT_API_KEY:-drone-secret}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Tắt các service không dùng cho Drone
+      - TTS_URL=
+      - VISION_URL=
+      - COLLECTOR_URL=
+    depends_on:
+      - whisperlive
+      - translation-service
+      - agent-service
+      - redis
+    networks: [ drone-net ]
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8056/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ──────────────────────────────────────────────────────────
+  # WhisperLive — STT nhận lệnh thoại từ Raspberry Pi 5
+  # Nhận audio 16kHz mono → trả về text lệnh bay
+  # ──────────────────────────────────────────────────────────
+  whisperlive:
+    build:
+      context: ./services/whisperlive-wrapper
+      dockerfile: Dockerfile
+    container_name: drone-whisperlive
+    ports:
+      - "8001:8001"
+    volumes:
+      - models-cache:/models
+    environment:
+      # Dùng tiny/small cho latency thấp (<300ms) — đủ cho lệnh ngắn
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - MODEL_CACHE_DIR=/models/whisper
+    networks: [ drone-net ]
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ──────────────────────────────────────────────────────────
+  # Translation Service — NLLB-200
+  # Dịch lệnh tiếng Việt → tiếng Anh để Regex/LLM xử lý
+  # Có thể tắt nếu phi công chỉ ra lệnh bằng tiếng Anh
+  # ──────────────────────────────────────────────────────────
+  translation-service:
+    build:
+      context: ./services/translation-service
+      dockerfile: Dockerfile
+    container_name: drone-nllb
+    ports:
+      - "8002:8002"
+    volumes:
+      - models-cache:/models
+    environment:
+      - NLLB_MODEL=${NLLB_MODEL:-facebook/nllb-200-distilled-600M}
+      - MODEL_CACHE_DIR=/models/nllb
+    networks: [ drone-net ]
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
+      interval: 60s
+      start_period: 90s
+
+  # ──────────────────────────────────────────────────────────
+  # Agent Service — Phân loại Intent bằng Ollama LLM
+  # POST /drone/classify  →  { intent, entities, confidence }
+  # ──────────────────────────────────────────────────────────
+  agent-service:
+    build:
+      context: ./services/agent-service
+      dockerfile: Dockerfile
+    container_name: drone-agent
+    ports:
+      - "8005:8005"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - LLM_MODEL=${LLM_MODEL:-llama3:8b}
+      - COLLECTOR_URL=  # Không dùng collector cho Drone
+    depends_on:
+      - ollama
+    networks: [ drone-net ]
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # Ollama — LLM runtime (Llama3 8B / Gemma3 9B)
+  # Chạy inference Intent Classification offline 100%
+  # ──────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: drone-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - models-cache:/root/.ollama
+    networks: [ drone-net ]
+    restart: unless-stopped
+    # Bỏ comment nếu có GPU NVIDIA:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [ gpu ]
+
+  # ──────────────────────────────────────────────────────────
+  # Redis — Message queue nội bộ
+  # ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: drone-redis
+    volumes:
+      - redis-data:/data
+    networks: [ drone-net ]
+    restart: unless-stopped

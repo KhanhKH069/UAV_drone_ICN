@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from prompts import SUMMARY_PROMPT, ACTION_ITEMS_PROMPT
+from drone_prompts import DRONE_CLASSIFY_PROMPT
 
 logger = logging.getLogger("paraline.agent")
 
@@ -127,6 +128,72 @@ def _parse_actions(raw: str) -> List[ActionItem]:
 @app.get("/health")
 async def health():
     return {"status": "ok", "llm": LLM_MODEL}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Drone Intent Classifier
+# POST /drone/classify  →  { intent, entities, confidence }
+# Được gọi bởi api-gateway/routers/drone.py khi Regex không match
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DroneClassifyReq(BaseModel):
+    text: str
+
+
+class DroneClassifyResp(BaseModel):
+    intent: Optional[str] = None
+    entities: dict = {}
+    confidence: float = 0.0
+    raw_text: str = ""
+    latency_ms: float = 0.0
+
+
+@app.post("/drone/classify", response_model=DroneClassifyResp)
+async def drone_classify(req: DroneClassifyReq):
+    """
+    Phân loại intent lệnh điều khiển Drone bằng LLM (Ollama).
+    Đây là tầng fallback khi Regex không nhận diện được câu lệnh.
+    """
+    t0 = time.perf_counter()
+    if not req.text.strip():
+        raise HTTPException(400, "text is required")
+
+    try:
+        prompt = DRONE_CLASSIFY_PROMPT.format(command=req.text.strip())
+        raw_response = await _call_llm(prompt)
+
+        # Parse JSON từ LLM response
+        intent = None
+        entities = {}
+        confidence = 0.0
+
+        m = re.search(r"\{.*\}", raw_response, re.DOTALL)
+        if m:
+            data = json.loads(m.group())
+            intent = data.get("intent") or None
+            entities = data.get("entities", {})
+            confidence = float(data.get("confidence", 0.7))
+
+        ms = (time.perf_counter() - t0) * 1000
+        logger.info(
+            f"[Drone Classify] '{req.text[:50]}' → intent={intent} "
+            f"conf={confidence:.2f} {ms:.0f}ms"
+        )
+
+        return DroneClassifyResp(
+            intent=intent,
+            entities=entities,
+            confidence=confidence,
+            raw_text=req.text,
+            latency_ms=round(ms, 1),
+        )
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"LLM returned invalid JSON: {e}\nResponse: {raw_response[:200]}")
+        return DroneClassifyResp(raw_text=req.text, latency_ms=round((time.perf_counter()-t0)*1000, 1))
+    except Exception as e:
+        logger.error(f"Drone classify error: {e}", exc_info=True)
+        raise HTTPException(500, str(e))
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ from routers.sessions import router as sessions_router
 from routers.images   import router as images_router
 from routers.agent    import router as agent_router
 from routers.mock     import router as mock_router
+from routers.drone    import router as drone_router
 from pipeline import AudioPipeline
 from connection_manager import ConnectionManager
 
@@ -60,6 +61,9 @@ app.include_router(sessions_router, prefix="/sessions", tags=["Sessions"])
 app.include_router(images_router,   prefix="/translate", tags=["Image Translation"])
 app.include_router(agent_router,    prefix="/agent",     tags=["Meeting Agent"])
 app.include_router(mock_router,     prefix="/mock",      tags=["Mock Testing"])
+
+# Drone UAV router (WebSocket + REST)
+app.include_router(drone_router, tags=["Drone UAV"])
 
 # Singletons
 connection_manager = ConnectionManager()
