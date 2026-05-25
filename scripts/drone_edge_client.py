@@ -23,7 +23,6 @@ import logging
 import sys
 import time
 import threading
-from collections import deque
 
 import cv2
 import numpy as np
@@ -32,7 +31,7 @@ import websockets
 import webrtcvad
 from scipy.signal import butter, lfilter
 from ultralytics import YOLO
-from dronekit import connect, VehicleMode, LocationGlobalRelative
+from dronekit import connect, VehicleMode
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

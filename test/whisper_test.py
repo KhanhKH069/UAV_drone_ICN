@@ -3,9 +3,6 @@ import requests
 from client.audio_router.audio_manager import AudioManager
 
 # 1. Định nghĩa hàm Callback để gửi lên Whisper
-import requests
-import json
-import time
 
 # Cấu hình URL của các microservices
 ASR_SERVICE_URL = "http://localhost:8001/transcribe" # Thay bằng port ASR thực tế của bạn

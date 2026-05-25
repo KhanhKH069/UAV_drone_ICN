@@ -151,7 +151,7 @@ import os
 import re
 import time
 import logging
-from typing import List, Union
+from typing import List
 
 import torch
 import uvicorn

@@ -9,10 +9,11 @@ from typing import Optional
 
 import numpy as np
 import dotenv
+import torch
+from qwen_asr import Qwen3ASRModel
+from .base import BaseASRBackend, ASRResult
 
 dotenv.load_dotenv()
-
-from .base import BaseASRBackend, ASRResult
 
 logger = logging.getLogger("paraline.asr.qwen3")
 
@@ -57,8 +58,6 @@ _HALLUCINATION_KEYWORDS = [
 
 class Qwen3ASRBackend(BaseASRBackend):
     def __init__(self):
-        import torch
-        from qwen_asr import Qwen3ASRModel
 
         model_name = os.getenv("QWEN_ASR_MODEL",  "Qwen/Qwen3-ASR-0.6B")
         device     = os.getenv("WHISPER_DEVICE",  "cuda")

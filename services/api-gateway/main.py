@@ -123,7 +123,7 @@ async def ws_audio_endpoint(
             finally:
                 queue.task_done()
 
-    worker_task = asyncio.create_task(_worker())
+    _ = asyncio.create_task(_worker())
 
     try:
         while True:

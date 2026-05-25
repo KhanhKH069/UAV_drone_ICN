@@ -66,7 +66,7 @@ def _print_result(msg: dict):
     elif t == "error":
         print(f"\n  ❌ ERROR: {msg.get('message', '?')}")
     elif t == "reset_ok":
-        print(f"\n  🔄 Buffer reset OK")
+        print("\n  🔄 Buffer reset OK")
 
 
 async def test_with_text(text: str, lang: str):
@@ -91,7 +91,7 @@ async def test_with_text(text: str, lang: str):
 
     try:
         async with websockets.connect(uri) as ws:
-            print(f"  ✅ WebSocket connected!")
+            print("  ✅ WebSocket connected!")
             # Gửi 1 chunk silence
             await ws.send(audio_bytes)
             # Báo endpoint để trigger kết quả
@@ -106,7 +106,7 @@ async def test_with_text(text: str, lang: str):
                 print("  ⚠️ Timeout: Server không trả về kết quả trong 10s")
     except Exception as e:
         print(f"  ❌ Lỗi kết nối: {e}")
-        print(f"  → Đảm bảo server đang chạy: docker-compose -f docker-compose.drone.yml up -d")
+        print("  → Đảm bảo server đang chạy: docker-compose -f docker-compose.drone.yml up -d")
 
 
 async def test_with_wav(wav_path: str, lang: str):
@@ -181,7 +181,7 @@ async def test_with_mic(lang: str):
 
     uri = f"ws://{SERVER_HOST}:{SERVER_PORT}/drone/stream?api_key={API_KEY}&drone_id={DRONE_ID}&lang={lang}"
     print(f"\n🚁 Kết nối tới: {uri}")
-    print(f"🎤 Đang dùng mic — Nói lệnh điều khiển Drone, nhấn Ctrl+C để dừng\n")
+    print("🎤 Đang dùng mic — Nói lệnh điều khiển Drone, nhấn Ctrl+C để dừng\n")
 
     audio_queue: asyncio.Queue = asyncio.Queue()
 
@@ -194,7 +194,7 @@ async def test_with_mic(lang: str):
 
     try:
         async with websockets.connect(uri) as ws:
-            print(f"  ✅ WebSocket connected! Đang nghe mic...\n")
+            print("  ✅ WebSocket connected! Đang nghe mic...\n")
 
             with sd.InputStream(
                 samplerate=SAMPLE_RATE,
@@ -234,7 +234,7 @@ async def test_with_mic(lang: str):
 
     except Exception as e:
         print(f"  ❌ Lỗi kết nối: {e}")
-        print(f"  → Đảm bảo server đang chạy: docker-compose -f docker-compose.drone.yml up -d")
+        print("  → Đảm bảo server đang chạy: docker-compose -f docker-compose.drone.yml up -d")
 
 
 async def test_classify_rest(text: str, lang: str):
@@ -273,7 +273,7 @@ async def test_classify_rest(text: str, lang: str):
         print(f"     Latency   : {data.get('latency_ms', 0):.0f}ms (LLM)")
     except Exception as e:
         print(f"  ❌ Lỗi: {e}")
-        print(f"  → Đảm bảo agent-service đang chạy trên port 8005")
+        print("  → Đảm bảo agent-service đang chạy trên port 8005")
 
 
 def main():

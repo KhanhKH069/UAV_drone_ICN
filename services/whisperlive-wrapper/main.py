@@ -10,8 +10,6 @@ POST /transcribe  →  { text, language, segments, latency_ms }
 import base64
 import logging
 import os
-import time
-import wave
 
 import numpy as np
 import uvicorn

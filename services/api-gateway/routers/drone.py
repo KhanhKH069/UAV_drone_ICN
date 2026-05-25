@@ -23,7 +23,6 @@ Frame protocol (Server → Drone):
   {"type": "unknown",  "raw_text": "...", "latency_ms": 300}   ← Không nhận diện được
   {"type": "error",    "message": "..."}
 """
-import asyncio
 import json
 import logging
 import os

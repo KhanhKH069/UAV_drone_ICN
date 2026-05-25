@@ -1,7 +1,6 @@
 import os
 import sys
 import base64
-import wave
 import numpy as np
 import requests
 
@@ -39,13 +38,12 @@ def test_asr_with_wav(wav_path):
 
     try:
         print(f"🚀 Đang gửi dữ liệu tới {ASR_URL} (ASR Backend)...")
-        t0 = os.getloadavg()[0] # Giả lập đo lường đơn giản hơn
         resp = requests.post(ASR_URL, json=payload, timeout=60)
         
         if resp.status_code == 200:
             res = resp.json()
             print("\n" + "="*50)
-            print(f"✅ KẾT QUẢ TỪ MODEL:")
+            print("✅ KẾT QUẢ TỪ MODEL:")
             print(f"  - Văn bản: {res['text']}")
             print(f"  - Ngôn ngữ: {res['language']}")
             print(f"  - Độ trễ xử lý: {res['latency_ms']:.2f}ms")
