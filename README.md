@@ -1,209 +1,70 @@
-# 🟠 Paraline MSAgent
+# 🚁 UAV Voice Control Edge Server
 
-> **Hệ thống Phiên dịch Thời gian thực & Trợ lý AI cho Google Meet (Chrome Extension)**
-> Hoạt động 100% offline trên mạng nội bộ VMG_STAFF — không có byte nào rời khỏi hệ thống công ty.
+Hệ thống **Tầng 3 (Edge AI Server)** dành cho đồ án điều khiển máy bay không người lái (UAV/Drone) bằng giọng nói tự nhiên, tái cấu trúc từ nền tảng *paraline-msagent*.
+
+Đây là bộ não trung tâm xử lý AI, giúp giảm tải hoàn toàn cho **Raspberry Pi 5** trên Drone, đưa tốc độ nhận diện lệnh và phản hồi xuống mức `< 300ms`.
 
 ---
 
-## Tổng quan kiến trúc
+## 🌟 Kiến trúc 4 Bước Xử Lý AI (Pipeline)
 
-Paraline MSAgent được xây dựng dựa trên **core pattern của Vexa AI** (api-gateway → WhisperLive → transcription-collector), mở rộng thêm các layer dịch thuật, TTS, Vision và AI Agent.
+Hệ thống hoạt động qua giao thức **WebSocket** (`ws://<IP>:8765/drone/stream`), nhận âm thanh từ Raspberry Pi 5 và trả về lệnh điều khiển (JSON).
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║                    CLIENT GUI APP (Windows)                  ║
-║  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   ║
-║  │Virtual Spkr │  │  Real Mic    │  │  Screenshot/Paste  │   ║
-║  │(Meet Audio) │  │              │  │  (Ctrl+V)          │   ║
-║  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘   ║
-║         │ JP/EN Raw      │ VN/EN Raw          │ Image B64    ║
-║         ▼                ▼                    ▼              ║
-║  ┌──────────────────────────────────────────────────────┐    ║
-║  │           WebSocket Stream Controller                 │    ║
-║  │  Audio Router + Mixer + Volume Control               │    ║
-║  └───────────────────────┬──────────────────────────────┘    ║
-║                          │ WebSocket (LAN)                   ║
-╚══════════════════════════╪══════════════════════════════════╝
-                           │
-          ╔════════════════╪═════════════════════════╗
-          ║      VMG AI SERVER (VMG_STAFF LAN)        ║
-          ║                ▼                          ║
-          ║  ┌─────────────────────────────────┐      ║
-          ║  │     api-gateway :8056/:8765      │      ║
-          ║  │  (Vexa pattern: routes + WS)    │      ║
-          ║  └───┬──────┬──────┬──────┬────────┘      ║
-          ║      │      │      │      │               ║
-          ║      ▼      ▼      ▼      ▼               ║
-          ║  [Whisper][NLLB][Piper][PaddleOCR]        ║
-          ║  [  ASR  ][Trans][TTS ][+OpenCV  ]        ║
-          ║                                            ║
-          ║  ┌──────────────────────────────────┐     ║
-          ║  │  transcription-collector :8006   │     ║
-          ║  │  (Vexa pattern: stores segments) │     ║
-          ║  └──────────────────────────────────┘     ║
-          ║                                            ║
-          ║  ┌──────────────────────────────────┐     ║
-          ║  │  agent-service (Ollama LLM)       │     ║
-          ║  │  Meeting Minutes + Action Items   │     ║
-          ║  └──────────────────────────────────┘     ║
-          ╚════════════════════════════════════════════╝
-                           │
-          ╔════════════════╪═════════════════════════╗
-          ║        OUTPUTS                            ║
-          ║  🎧 VN Audio → Real Headphone             ║
-          ║  📝 Subtitle → Side-panel overlay         ║
-          ║  💬 Text → Google Meet Chat (Extension)   ║
-          ║  🖼️  Translated Slide Image → Side-panel   ║
-          ╚════════════════════════════════════════════╝
-```
+1. **🎙️ Speech-to-Text (Faster-Whisper):** Nhận diện âm thanh giọng nói (Hỗ trợ model Tiny/Small INT8 tối ưu cho CPU hoặc Float16 cho GPU).
+2. **🌐 Translation (NLLB-200):** Dịch tự động lệnh Tiếng Việt sang Tiếng Anh để xử lý đồng nhất.
+3. **⚡ Intent Regex (Rule-based):** Xử lý cực nhanh (`<5ms`) 28 intent bay cơ bản (Cất cánh, hạ cánh, xoay, tiến lùi, v.v.). Trích xuất trực tiếp số liệu (khoảng cách, góc quay).
+4. **🧠 LLM Fallback (Ollama):** Nếu câu lệnh quá phức tạp hoặc mơ hồ, Llama3/Gemma3 sẽ phân tích ngữ nghĩa và đoán ý định (Confidence > 0.7).
 
-## Cấu trúc dự án
+---
 
-```
+## 🛠️ Cấu trúc Thư mục
+
+```text
 paraline-msagent/
-├── services/                     # VMG AI Server — Docker microservices
-│   ├── api-gateway/              # FastAPI gateway + WebSocket hub (Vexa: api-gateway)
-│   ├── admin-api/                # Quản trị server (Vexa: admin-api)
-│   ├── whisperlive-wrapper/      # Faster-Whisper realtime STT (Vexa: WhisperLive)
-│   ├── transcription-collector/  # Thu gom & lưu transcript (Vexa: transcription-collector)
-│   ├── translation-service/      # NLLB-200 machine translation
-│   ├── tts-service/              # Piper TTS → Vietnamese audio
-│   ├── vision-service/           # PaddleOCR + OpenCV inpainting + Pillow render
-│   ├── agent-service/            # Ollama LLM → Meeting Minutes + Action Items
-│   ├── session-manager/          # Quản lý phiên họp Teams
-│   └── database/                 # PostgreSQL models + migrations (Vexa pattern)
-├── client/                       # Windows GUI App — nhẹ, cài trên máy nhân viên
-│   ├── audio_router/             # VB-Audio Virtual Cable routing
-│   ├── websocket_client/         # WebSocket stream controller (inbound + outbound)
-│   ├── meet_integration/         # Google Meet bridge server + client
-│   ├── teams_integration/        # (tuỳ chọn) Microsoft Graph API + Incoming Webhook
-│   ├── image_handler/            # Chụp màn hình, paste ảnh, hiển thị kết quả
-│   └── ui/                       # PyQt6 Side-panel — dock cạnh cửa sổ họp
-├── chrome_extension/             # Google Meet extension (detect meeting + inject chat)
-├── shared/                       # Schemas, utils dùng chung client ↔ server
-├── scripts/                      # Download models, setup, health check
-├── docs/                         # Tài liệu kỹ thuật chi tiết
-├── docker-compose.yml            # Khởi động toàn bộ server stack
-├── Makefile                      # make all / make up / make logs ...
-└── .env.example                  # Template cấu hình
+├── docker-compose.yml       # Khởi động cụm AI server (Microservices)
+├── .env.drone.example       # File biến môi trường (Config model, API Key)
+├── docs/
+│   └── DRONE_SETUP.md       # 📖 Hướng dẫn chi tiết cách Setup & Cài đặt
+├── scripts/
+│   └── drone_edge_client.py # Mã nguồn chạy thực tế trên Raspberry Pi 5 (VAD + MAVLink)
+│   └── test_drone_client.py # Mã nguồn test giả lập (Mic, File WAV, Text)
+└── services/
+    ├── api-gateway          # Cổng WebSocket nhận/trả tín hiệu từ Drone
+    ├── agent-service        # Service gọi Ollama LLM
+    ├── translation-service  # NLLB dịch tự động
+    └── whisperlive-wrapper  # STT Whisper
 ```
 
-## Pipelines xử lý
+---
 
-| Pipeline | Flow | Target Latency |
-|---|---|---|
-| **Inbound** (JP/EN → VN) | Virtual Speaker → Whisper → NLLB → Piper → Headphone + Subtitle | **< 1.0s** |
-| **Outbound** (VN/EN → Meet) | Real Mic → Whisper → NLLB → Meet Chat (Extension) | **< 1.0s** |
-| **Image** (Slide JP/EN → VN) | Screenshot → PaddleOCR → NLLB → Inpaint → Pillow Render | **< 3.0s** |
-| **Agent** (Transcript → Minutes) | Full session text → Ollama Llama 3 → Summary + Action Items | Post-meeting |
+## 🚀 Khởi động Nhanh
 
-## Quick Start
-
+**1. Chuẩn bị biến môi trường**
 ```bash
-# 1. Clone & cấu hình
-git clone <repo> && cd paraline-msagent
-cp .env.example .env
-# Sửa VMG_SERVER_IP, CLIENT_API_KEY, MEET_* trong .env
+cp .env.drone.example .env.drone
+```
+*Chỉnh sửa file `.env.drone` để chọn loại Model Whisper (cpu/cuda, int8/float16).*
 
-# 2. Download AI models
-make download-models
-
-# 3. Khởi động server
-make all          # = make env + make build + make up
-
-# 4. Kiểm tra health
-make health
-
-# 5. Cài Client App trên máy nhân viên
-cd client && pip install -r requirements.txt
-python -m client.ui.main_app
+**2. Khởi động AI Server**
+```bash
+docker-compose --env-file .env.drone up -d
 ```
 
-## Quick Start (Google Meet)
-
-### 1) Cài Chrome Extension
-1. Mở Chrome → `chrome://extensions`
-2. Bật **Developer mode**
-3. **Load unpacked** → chọn thư mục `chrome_extension/`
-
-### 2) Chuẩn bị audio (VB-Audio Virtual Cable)
-- Cài **VB-Audio Virtual Cable** và restart máy
-- Trong **Google Meet** → Settings:
-  - **Speaker**: chọn **`CABLE Input`** (để app thu “virtual speaker/inbound”)
-  - **Microphone**: chọn mic bạn muốn dùng để nói (real mic)
-- Trong app / env:
-  - `VIRTUAL_SPEAKER_NAME="CABLE Output"`
-
-### 3) Chạy app client (Windows)
-Trên máy sẽ join Meet:
-
-```powershell
-cd paraline-msagent\client
-pip install -r requirements.txt
-$env:PARALINE_SERVER_WS   = "ws://<IP_SERVER>:8765"
-$env:PARALINE_SERVER_REST = "http://<IP_SERVER>:8056"
-$env:CLIENT_API_KEY       = "<client-api-key>"
-$env:VIRTUAL_SPEAKER_NAME = "CABLE Output"
-$env:MEET_BRIDGE_PORT     = "9877"
-python -m client.ui.main_app
+**3. Tải Model LLM (Chỉ chạy lần đầu)**
+```bash
+docker exec drone-ollama ollama pull llama3:8b
 ```
 
-> Lưu ý (Windows):
-> - **Chỉ cài dependencies trong `client/requirements.txt`.** Các `services/*` chạy bằng Docker (Linux containers).
-> - Khuyến nghị dùng **Python 3.11** (repo có `.python-version=3.11.9`). Nếu dùng Python 3.13 có thể gặp lỗi thiếu wheel / build native (ví dụ `paddlepaddle`, `av`).
+**4. Test thử Server (Không cần mic)**
+```bash
+python scripts/test_drone_client.py --text "bay tới trước 3 mét" --lang vi
+```
 
-### 4) Join Google Meet theo flow “paste link + bấm Join”
-1. Copy link Meet từ đối tác (ví dụ `https://meet.google.com/abc-defg-hij`)
-2. Trong app, **dán link vào ô Join** → bấm **Join**
-3. Chrome sẽ mở Meet. Khi vào meeting:
-   - App sẽ tự start phiên dịch sau ~2s
-   - Outbound text sẽ được đẩy lên **chat chung** (qua extension)
+---
 
-### 5) Dịch slide trong lúc họ trình chiếu
-- Dùng Snipping Tool (Win+Shift+S) chụp vùng slide → **Ctrl+V** vào app
-- App sẽ OCR + dịch chữ sang tiếng Việt và giữ bố cục ảnh
+## 📖 Hướng dẫn chi tiết
+Xem chi tiết cách cài đặt lên máy bay (Raspberry Pi 5) và kết nối với **MAVLink (Pixhawk/ArduPilot)** tại:  
+👉 **[docs/DRONE_SETUP.md](docs/DRONE_SETUP.md)**
 
-### 6) Checklist nhanh nếu “không thấy chat/không nghe”
-- **Extension popup**:
-  - **Bridge (Python)** = `Connected`
-  - **Cuộc họp** = `Active`
-- **Meet Speaker** = `CABLE Input`
-- **App env**: `VIRTUAL_SPEAKER_NAME="CABLE Output"`
-- **Port**: `MEET_BRIDGE_PORT=9877` (không bị app khác chiếm)
-
-> Chi tiết hơn xem `docs/SETUP.md` (mục “Google Meet Integration Setup”).
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| STT | faster-whisper (large-v3) — Vexa WhisperLive pattern |
-| Translation | NLLB-200-distilled-600M (facebook) |
-| TTS | Piper TTS (vi_VN-vivos-medium) |
-| OCR | PaddleOCR (jp + en) |
-| Image Processing | OpenCV TELEA inpaint + Pillow render |
-| LLM | Ollama — Llama 3 8B / Gemma 3 9B |
-| Audio Routing | VB-Audio Virtual Cable (Windows) |
-| Transport | WebSocket over LAN (< 1ms latency) |
-| Meet | Chrome Extension + local bridge (HTTP) |
-| Teams | (tuỳ chọn) Microsoft Graph API / Incoming Webhook |
-| GUI | PyQt6 (frameless side-panel) |
-| Server | FastAPI + uvicorn |
-| Orchestration | Docker Compose (Vexa pattern) |
-| DB | PostgreSQL 15 + Redis 7 |
-
-## Bảo mật
-
-- ✅ **100% offline** — zero external API calls
-- ✅ Tất cả AI models chạy local trên VMG_STAFF
-- ✅ WebSocket chỉ bind trên LAN interface
-- ✅ Không log raw audio — chỉ log transcript đã xử lý
-- ✅ API key authentication giữa client ↔ server
-
-## Roadmap (5 Phases)
-
-- [ ] **Phase 1** — AI Server Core: Whisper + NLLB + Piper APIs
-- [ ] **Phase 2** — Audio Client App + Virtual Audio Cable routing
-- [ ] **Phase 3** — Image Translation Pipeline (OCR + Inpaint)
-- [ ] **Phase 4** — Teams Chat Integration (Graph API)
-- [ ] **Phase 5** — AI Meeting Agent (Meeting Minutes + Action Items)
+---
+*Dự án được tuỳ biến riêng biệt dựa trên mã nguồn mở Paraline.*
