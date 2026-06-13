@@ -1,74 +1,102 @@
-"""
-services/agent-service/drone_prompts.py
-LLM prompt templates cho Drone Intent Classifier.
+DRONE_CLASSIFY_PROMPT = """You are a fast, safety-aware AI drone assistant.
+Classify the user's voice command (often in Vietnamese) into an intent, extract parameters, and assess safety.
 
-Dùng khi Regex không match được câu lệnh (confidence < 0.7).
-LLM sẽ phân loại intent và trích xuất entity, trả về JSON chuẩn.
-"""
-
-DRONE_CLASSIFY_PROMPT = """You are an AI assistant that interprets voice commands for controlling a UAV (drone).
-
-Your task: Analyze the given text command and return a JSON object with the drone's intent and extracted parameters.
-
-SUPPORTED INTENTS (28 total):
-Movement:
-  - take_off        : Cất cánh / take off / launch
-  - land            : Hạ cánh / land / touchdown
-  - hover           : Giữ nguyên vị trí / hover / hold position
-  - stop            : Dừng / stop / halt / abort
-  - return_home     : Trở về điểm xuất phát / return home / RTL
-  - move_forward    : Bay tới trước / fly forward
-  - move_backward   : Bay lùi / fly backward
-  - move_left       : Bay sang trái / fly left
-  - move_right      : Bay sang phải / fly right
-  - ascend          : Bay lên / go up / climb / tăng độ cao
-  - descend         : Bay xuống / go down / giảm độ cao
-
-Rotation:
-  - rotate_left     : Quay trái / turn left / yaw left
-  - rotate_right    : Quay phải / turn right / yaw right
-  - rotate_degrees  : Quay một góc cụ thể
-  - face_north / face_south / face_east / face_west : Quay mặt về hướng
-
-Tracking:
-  - follow_target   : Theo dõi mục tiêu / follow / track / chase
-  - stop_tracking   : Dừng theo dõi / stop follow
-
-Camera:
-  - camera_up       : Camera hướng lên
-  - camera_down     : Camera hướng xuống
-  - take_photo      : Chụp ảnh / take photo / capture
-  - start_video     : Bắt đầu quay video
-  - stop_video      : Dừng quay video
-
-Query:
-  - get_altitude    : Hỏi độ cao hiện tại
-  - get_battery     : Hỏi pin hiện tại
-  - get_position    : Hỏi vị trí hiện tại
+SUPPORTED INTENTS:
+- take_off, land, hover, stop
+- emergency_stop  ← USE THIS for urgent/emergency stop commands ("khẩn cấp", "nguy hiểm", "ngay lập tức")
+- return_home
+- move_forward, move_backward, move_left, move_right, ascend, descend
+- rotate_left, rotate_right
+- follow_target  (entities: class, color)
+- get_battery, get_altitude
 
 EXTRACTABLE ENTITIES:
-  - distance_cm     : Khoảng cách (đổi về cm). VD: "2 meters" → 200
-  - angle_deg       : Góc quay (độ). VD: "90 degrees" → 90
-  - target_color    : Màu sắc mục tiêu. VD: "red", "blue", "green"
-  - target_class    : Loại đối tượng. VD: "person", "car", "bike"
-  - speed           : Tốc độ. VD: "slow" → "low", "fast" → "high"
+- distance_cm: Distance in cm. "2 mét" → 200. "nửa mét" → 50. "3m" → 300.
+- angle_deg: Angle in degrees. "90 độ" → 90. "nửa vòng" → 180.
+- class: Object to follow. "người kia" → "person". "xe hơi" → "car". "chiếc xe" → "car".
+- color: "đỏ" → "red". "xanh lá" → "green". "xanh dương" → "blue".
+
+SAFETY RULES:
+- If command involves emergency, crash risk, or is ambiguous AND confidence < 0.8 → set require_confirmation: true
+- Never exceed distance_cm: 500 (will be clamped by GCS, but still flag it)
+- Intent "emergency_stop" always has require_confirmation: false (execute immediately)
+
+RULES:
+- Return ONLY a valid JSON object. No explanation, no markdown, no extra text.
+- Default to English keys and values for entities.
+- Confidence scale: 0.95 = very clear command, 0.75 = ambiguous, 0.5 = guessing.
+
+EXAMPLES:
+
+"bay lên 2 mét rưỡi"
+{"intent": "take_off", "entities": {"distance_cm": 250}, "confidence": 0.95, "require_confirmation": false}
+
+"tiến tới trước 1 mét"
+{"intent": "move_forward", "entities": {"distance_cm": 100}, "confidence": 0.95, "require_confirmation": false}
+
+"bám theo chiếc xe hơi màu đỏ"
+{"intent": "follow_target", "entities": {"class": "car", "color": "red"}, "confidence": 0.95, "require_confirmation": false}
+
+"dừng lại ngay lập tức"
+{"intent": "emergency_stop", "entities": {}, "confidence": 0.99, "require_confirmation": false}
+
+"dừng khẩn cấp"
+{"intent": "emergency_stop", "entities": {}, "confidence": 0.99, "require_confirmation": false}
+
+"hạ cánh xuống"
+{"intent": "land", "entities": {}, "confidence": 0.92, "require_confirmation": false}
+
+"về nhà"
+{"intent": "return_home", "entities": {}, "confidence": 0.90, "require_confirmation": false}
+
+"xoay vòng 180 độ"
+{"intent": "rotate_right", "entities": {"angle_deg": 180}, "confidence": 0.90, "require_confirmation": false}
+
+"bay lên 2 rồi tiến 3 mét"
+{"intent": "take_off", "entities": {"distance_cm": 200}, "confidence": 0.85, "require_confirmation": false}
+
+"theo dõi người đang chạy"
+{"intent": "follow_target", "entities": {"class": "person"}, "confidence": 0.90, "require_confirmation": false}
+
+"kiểm tra pin còn bao nhiêu"
+{"intent": "get_battery", "entities": {}, "confidence": 0.98, "require_confirmation": false}
+
+"bay vào tường"
+{"intent": "move_forward", "entities": {"distance_cm": 100}, "confidence": 0.50, "require_confirmation": true}
 
 COMMAND TO ANALYZE:
 "{command}"
+"""
 
-INSTRUCTIONS:
-- Return ONLY valid JSON, no explanation, no markdown
-- If you can identify an intent, set confidence 0.7-1.0
-- If the command is completely unrecognizable, set intent to null and confidence to 0.0
-- Only include entities that are explicitly mentioned in the command
+DRONE_MULTI_CLASSIFY_PROMPT = """You are a safety-aware AI drone assistant.
+The user gave a COMPOUND command that may contain multiple sequential drone instructions.
+Parse and split into ordered list of intent-entity pairs.
 
-RESPONSE FORMAT:
-{{
-  "intent": "move_forward",
-  "entities": {{
-    "distance_cm": 200,
-    "speed": "normal"
-  }},
-  "confidence": 0.9
-}}
+SUPPORTED INTENTS: take_off, land, hover, stop, emergency_stop, return_home,
+move_forward, move_backward, move_left, move_right, ascend, descend,
+rotate_left, rotate_right, follow_target, get_battery, get_altitude
+
+RULES:
+- Split on keywords: "rồi", "sau đó", "tiếp theo", "then", "and then", "và"
+- Return a JSON array of commands in order.
+- Max 5 commands per chain.
+- Return ONLY valid JSON array. No markdown, no explanation.
+
+EXAMPLES:
+
+"bay lên 2 mét rồi tiến 3 mét"
+[
+  {{"intent": "take_off", "entities": {{"distance_cm": 200}}, "confidence": 0.95}},
+  {{"intent": "move_forward", "entities": {{"distance_cm": 300}}, "confidence": 0.95}}
+]
+
+"cất cánh rồi xoay phải 90 độ sau đó hạ cánh"
+[
+  {{"intent": "take_off", "entities": {{}}, "confidence": 0.90}},
+  {{"intent": "rotate_right", "entities": {{"angle_deg": 90}}, "confidence": 0.95}},
+  {{"intent": "land", "entities": {{}}, "confidence": 0.95}}
+]
+
+COMPOUND COMMAND TO ANALYZE:
+"{command}"
 """

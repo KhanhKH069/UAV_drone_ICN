@@ -1,7 +1,3 @@
-"""
-services/api-gateway/routers/images.py
-Image translation REST endpoint — proxies to vision-service.
-"""
 import os
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -22,7 +18,7 @@ class ImageTranslateReq(BaseModel):
 
 @router.post("/image")
 async def translate_image(req: ImageTranslateReq):
-    """Proxy image translate request to vision-service."""
+
     try:
         resp = await _http.post(f"{VISION_URL}/translate/image", json=req.model_dump())
         resp.raise_for_status()

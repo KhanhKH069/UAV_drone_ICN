@@ -1,16 +1,3 @@
-"""
-services/api-gateway/routers/mock.py
-Mock text injection endpoint for testing the translation pipeline
-without real audio / STT model running.
-
-POST /mock/inject
-{
-    "session_id": "...",
-    "text": "Hello, this is a test sentence.",
-    "src_lang": "eng_Latn",
-    "tgt_lang": "vie_Latn"
-}
-"""
 import logging
 import os
 import time
@@ -23,13 +10,9 @@ router = APIRouter()
 logger = logging.getLogger("paraline.mock")
 
 TRANSLATION_URL = os.getenv("TRANSLATION_URL", "http://translation-service:8002")
-TTS_URL         = os.getenv("TTS_URL",          "http://tts-service:8003")
 
-# Per-session "mock subscribers" (websockets waiting for mock output)
-_mock_subs: dict = {}
 _http = httpx.AsyncClient(timeout=15.0)
 
-# ── Sample texts for mock test ──────────────────────────────────────────────
 MOCK_EN_TEXTS = [
     "Hello everyone, today we will discuss the project timeline.",
     "The development team has finished the first phase of implementation.",
@@ -46,35 +29,31 @@ MOCK_JA_TEXTS = [
     "会議はアクションアイテムのまとめで終わります。",
 ]
 
-
 class MockInjectReq(BaseModel):
     session_id: str
     src_lang: str = "eng_Latn"
     tgt_lang: str = "vie_Latn"
 
-
 class MockInjectResp(BaseModel):
     results: list
     latency_ms: float
 
-
 @router.post("/inject", response_model=MockInjectResp)
 async def mock_inject(req: MockInjectReq):
-    """
-    Inject a batch of mock sentences directly into the translation pipeline.
-    Skips STT; useful for testing translation + TTS on machines without GPU/virtual device.
-    """
     texts = MOCK_EN_TEXTS if "eng" in req.src_lang else MOCK_JA_TEXTS
     results = []
     t0 = time.perf_counter()
 
     for text in texts:
         try:
-            r = await _http.post(f"{TRANSLATION_URL}/translate", json={
-                "text":     text,
-                "src_lang": req.src_lang,
-                "tgt_lang": req.tgt_lang,
-            })
+            r = await _http.post(
+                f"{TRANSLATION_URL}/translate",
+                json={
+                    "text": text,
+                    "src_lang": req.src_lang,
+                    "tgt_lang": req.tgt_lang,
+                },
+            )
             r.raise_for_status()
             translated = r.json().get("translated_text", "")
             results.append({"original": text, "translated": translated})

@@ -46,3 +46,9 @@ Thumbs.db
 test_output/
 *.wav
 *.png.tmp
+
+# Junk files and folders
+3-SV-2026-VT1, Pham Anh Thu.docx
+426.pdf
+docx_content.txt
+dataaaa/

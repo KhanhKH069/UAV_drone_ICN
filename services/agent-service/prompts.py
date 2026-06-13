@@ -1,8 +1,3 @@
-"""
-services/agent-service/prompts.py
-LLM prompt templates cho Meeting Agent.
-"""
-
 SUMMARY_PROMPT = """Bạn là trợ lý AI tóm tắt biên bản họp chuyên nghiệp cho công ty VMG.
 
 Nội dung cuộc họp (đã dịch sang tiếng Việt):

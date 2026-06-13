@@ -1,0 +1,13 @@
+# Unsloth core & dependencies for fast fine-tuning
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+xformers
+trl
+peft
+accelerate
+bitsandbytes
+datasets
+transformers
+torch
+# Note: You may need to run specific pip install commands for torch depending on your CUDA version.
+# Example for CUDA 12.1:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121

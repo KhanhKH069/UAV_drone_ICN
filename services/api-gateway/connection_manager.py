@@ -1,10 +1,10 @@
-"""WebSocket connection manager — tracks active sessions."""
 import logging
 from collections import defaultdict
 from typing import Dict, List
 from fastapi import WebSocket
 
 logger = logging.getLogger("paraline.connmgr")
+
 
 class ConnectionManager:
     def __init__(self):
@@ -13,7 +13,15 @@ class ConnectionManager:
     async def connect(self, ws: WebSocket, session_id: str, direction: str = ""):
         await ws.accept()
         self._connections[session_id].append(ws)
-        logger.debug(f"Connect: {session_id[:8]} ({direction}), total={len(self._connections)}")
+        logger.debug(
+            f"Connect: {session_id[:8]} ({direction}), total={len(self._connections)}"
+        )
+
+    def register(self, ws: WebSocket, session_id: str, direction: str = ""):
+        self._connections[session_id].append(ws)
+        logger.debug(
+            f"Register: {session_id[:8]} ({direction}), total={len(self._connections)}"
+        )
 
     def disconnect(self, ws: WebSocket, session_id: str):
         conns = self._connections.get(session_id, [])
