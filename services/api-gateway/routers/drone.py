@@ -4,7 +4,6 @@ import io
 import json
 import logging
 import os
-import re
 import time
 import jwt
 from typing import Optional, Tuple
@@ -15,8 +14,9 @@ import soundfile as sf
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from connection_manager import ConnectionManager
+from nlp import spell_correct, regex_classify, extract_entities, split_compound_commands
 
-logger = logging.getLogger("paraline.drone")
+logger = logging.getLogger("uav_drone.drone")
 
 router = APIRouter()
 drone_conns = ConnectionManager()
@@ -27,136 +27,8 @@ AGENT_URL = os.getenv("AGENT_URL", "http://agent-service:8005")
 _http = httpx.AsyncClient(timeout=30.0, limits=httpx.Limits(max_connections=20))
 
 CRITICAL_INTENTS = {"land", "stop", "return_home"}
-MAX_BUFFER_BYTES = 16000 * 2 * 30
+MAX_BUFFER_BYTES = 16000 * 2 * 30  # 30 seconds of 16kHz mono int16 audio
 
-_INTENT_PATTERNS = [
-    ("take_off", r"\b(cất cánh|bay lên|take off|takeoff|lift off|launch|take flight|depart)\b"),
-    ("land", r"\b(hạ cánh|đáp xuống|land|landing|touch down|set down|descend and land)\b"),
-    ("hover", r"\b(dừng lại|đứng yên|giữ vị trí|giữ nguyên|hover|hold position|hold altitude|stay in place|maintain (position|altitude)|wait here)\b"),
-    ("stop", r"\b(dừng|ngừng|stop|halt|pause|freeze|cut engines)\b"),
-    ("return_home", r"\b(quay về|về nhà|về điểm xuất phát|return (to )?home|go home|come back|rtl|return to base|fly back)\b"),
-    ("move_forward", r"\b(tiến|tới|bay tới|tiến tới trước|đi thẳng|bay thẳng|head|go|fly|move|proceed|continue|straight|forward)\b"),
-    ("move_backward", r"\b(lùi|bay lùi|lùi lại|backward|back)\b"),
-    ("rotate_left", r"\b(xoay trái|quay trái|rotate left|turn left|spin left|yaw left)\b"),
-    ("rotate_right", r"\b(xoay phải|quay phải|rotate right|turn right|spin right|yaw right)\b"),
-    ("move_left", r"\b(sang trái|bay sang trái|trái|left)\b"),
-    ("move_right", r"\b(sang phải|bay sang phải|phải|right)\b"),
-    ("ascend", r"\b(bay cao|nâng cao|lên cao|ascend|climb|rise|go up|fly up|move up|increase altitude|higher)\b"),
-    ("descend", r"\b(bay thấp|hạ thấp|xuống thấp|descend|lower|go down|fly down|decrease altitude|fly lower)\b"),
-    ("follow_target", r"\b(bám theo|theo dõi|đuổi theo|follow|track|chase|pursue|trail|keep up with|stay with)\b"),
-    ("get_battery", r"\b(hỏi pin|kiểm tra pin|xem pin|pin|battery|how much battery)\b"),
-    ("get_altitude", r"\b(hỏi độ cao|kiểm tra độ cao|độ cao|altitude|how high)\b"),
-    ("ask_direction", r"\b(which direction|what direction|where should i go|how to go|where.*go now)\b"),
-    ("ask_destination_appearance", r"\b(what.*destination look|how does.*destination|destination.*color|destination.*shape)\b"),
-    ("ask_proximity", r"\b(am i (near|close|at)|how far|am i (almost|nearly)|near the destination)\b"),
-    ("ask_visibility", r"\b(can i see|is.*in (my )?view|in.*field of view|is.*visible|do i see)\b"),
-    ("ask_current_position", r"\b(i am (on|at|in|near)|i('m| am) (on top|on the|at the)|i (move|moved|pass|passed|turn))\b"),
-    ("orbit", r"\b(circle|orbit|fly around|loop around|go around|revolve)\b"),
-    ("map_area", r"\b(map|scan|survey|cover the area|grid)\b"),
-    ("spray_zone", r"\b(spray|sprinkle|dispense|fertiliz)\b"),
-]
-
-
-def _regex_classify(text: str) -> Tuple[Optional[str], float]:
-    text_lower = text.lower().strip()
-    for intent_name, pattern in _INTENT_PATTERNS:
-        if re.search(pattern, text_lower):
-            confidence = 0.95 if len(text_lower.split()) <= 8 else 0.85
-            return intent_name, confidence
-    return None, 0.0
-
-
-def _extract_entities(text: str, intent: str) -> dict:
-    entities = {}
-    text_lower = text.lower()
-
-    dist_m = re.search(r"(\d+(?:\.\d+)?)\s*(mét|met|meter|metre|m)s?\b", text_lower)
-    dist_cm = re.search(r"(\d+)\s*(centimet|phân|centimeter|centimetre|cm)s?\b", text_lower)
-    dist_ft = re.search(r"(\d+(?:\.\d+)?)\s*(?:foot|feet|ft)s?\b", text_lower)
-    if dist_m:
-        entities["distance_cm"] = int(float(dist_m.group(1)) * 100)
-    elif dist_cm:
-        entities["distance_cm"] = int(dist_cm.group(1))
-    elif dist_ft:
-        entities["distance_cm"] = int(float(dist_ft.group(1)) * 30.48)
-
-    angle = re.search(r"(\d+)\s*(độ|degree|deg|°)", text_lower)
-    if angle:
-        entities["angle_deg"] = int(angle.group(1))
-
-    compass = re.search(
-        r"\b(north|south|east|west|northeast|northwest|southeast|southwest)\b",
-        text_lower,
-    )
-    if compass:
-        entities["compass"] = compass.group(1)
-
-    clock = re.search(r"\b(\d+)\s*['\u2019]?\s*o['\u2019]?\s*clock\b", text_lower)
-    if clock:
-        entities["clock"] = int(clock.group(1))
-
-    color_map = {"đỏ": "red", "xanh dương": "blue", "xanh lá": "green", "vàng": "yellow", "trắng": "white", "đen": "black"}
-    color = re.search(
-        r"\b(red|blue|green|yellow|white|black|orange|purple|brown|grey|gray|đỏ|xanh dương|xanh lá|vàng|trắng|đen)\b",
-        text_lower,
-    )
-    if color:
-        c_val = color.group(1)
-        entities["target_color"] = color_map.get(c_val, c_val)
-
-    target_map = {"người": "person", "xe hơi": "car", "ô tô": "car", "xe máy": "bike", "people": "person", "man": "person", "woman": "person"}
-    obj_class = re.search(
-        r"\b(person|people|man|woman|car|bike|bicycle|building|road|bridge|field|area|người|xe hơi|ô tô|xe máy)\b",
-        text_lower,
-    )
-    if obj_class:
-        cls_val = obj_class.group(1)
-        entities["target_class"] = target_map.get(cls_val, cls_val)
-
-    speed_map = {"chậm": "low", "từ từ": "low", "nhanh": "high", "slow": "low", "slowly": "low", "fast": "high", "quickly": "high"}
-    speed = re.search(r"\b(chậm|từ từ|nhanh|slow|fast|quickly|slowly)\b", text_lower)
-    if speed:
-        entities["speed"] = speed_map.get(speed.group(1), "normal")
-
-    return entities
-
-
-def _split_compound_commands(text: str) -> list[str]:
-    parts = re.split(
-        r"\b(and then|then|and|sau đó|rồi|và)\b", text, flags=re.IGNORECASE
-    )
-    commands = []
-    for p in parts:
-        p = p.strip()
-        if p and p.lower() not in ["and then", "then", "and", "sau đó", "rồi", "và"]:
-            commands.append(p)
-    return commands
-
-_STT_CORRECTIONS = {
-    r"\btek of\b": "take off",
-    r"\btake of\b": "take off",
-    r"\btack off\b": "take off",
-    r"\blaning\b": "landing",
-    r"\blen\b": "land",
-    r"\bflay\b": "fly",
-    r"\bflye\b": "fly",
-    r"\bgo foward\b": "go forward",
-    r"\bforwad\b": "forward",
-    r"\bstraigh\b": "straight",
-    r"\brighte\b": "right",
-    r"\brotat\b": "rotate",
-    r"\bterm left\b": "turn left",
-    r"\bterm right\b": "turn right",
-    r"\bhove\b": "hover",
-    r"\bhaver\b": "hover",
-}
-
-
-def _spell_correct_stt(text: str) -> str:
-    text_lower = text.lower()
-    for wrong, right in _STT_CORRECTIONS.items():
-        text_lower = re.sub(wrong, right, text_lower)
-    return text_lower
 
 
 @router.websocket("/drone/stream")
@@ -278,16 +150,14 @@ async def drone_stream(
 
                     logger.info(f"[Drone/{drone_id}] ASR: '{raw_text}'")
 
-                    en_text = raw_text
+                    en_text = spell_correct(raw_text)
 
-                    en_text = _spell_correct_stt(en_text)
-
-                    sub_commands = _split_compound_commands(en_text)
+                    sub_commands = split_compound_commands(en_text)
                     command_list = []
 
                     for sub_text in sub_commands:
-                        intent, confidence = _regex_classify(sub_text)
-                        entities = _extract_entities(sub_text, intent) if intent else {}
+                        intent, confidence = regex_classify(sub_text)
+                        entities = extract_entities(sub_text, intent) if intent else {}
 
                         require_confirmation = False
 

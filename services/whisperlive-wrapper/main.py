@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-logger = logging.getLogger("paraline.whisperlive")
+logger = logging.getLogger("uav_drone.asr")
 
 ASR_BACKEND = os.getenv("ASR_BACKEND", "faster_whisper")
 
@@ -54,7 +54,7 @@ except Exception as e:
     logger.error(f"Backend load error '{ASR_BACKEND}': {e}", exc_info=True)
 
 
-app = FastAPI(title=f"Paraline ASR [{ASR_BACKEND}]")
+app = FastAPI(title=f"UAV_drone_ICN ASR [{ASR_BACKEND}]")
 
 
 class TranscribeReq(BaseModel):

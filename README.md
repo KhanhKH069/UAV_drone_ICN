@@ -68,7 +68,7 @@ flowchart TD
 ## 🛠️ Cấu trúc thư mục
 
 ```
-paraline-msagent/
+UAV_drone_ICN/
 ├── docker-compose.yml           # Khởi động cụm AI microservices
 ├── .env.drone.example           # Biến môi trường (model, JWT secret)
 ├── start_sitl.bat               # Khởi động ArduPilot SITL (drone ảo)

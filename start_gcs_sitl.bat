@@ -1,6 +1,6 @@
 @echo off
 echo ==============================================
-echo 🛸 PARALINE MS-AGENT - START GCS (SITL MODE)
+echo 🛸 UAV_drone_ICN - START GCS (SITL MODE)
 echo ==============================================
 echo.
 echo Đang kết nối GCS Engine tới máy bay ảo SITL qua cổng TCP 5760...

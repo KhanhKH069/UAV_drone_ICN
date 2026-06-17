@@ -11,7 +11,7 @@ from .base import BaseASRBackend, ASRResult
 
 dotenv.load_dotenv()
 
-logger = logging.getLogger("paraline.asr.qwen3")
+logger = logging.getLogger("uav_drone.asr.qwen3")
 
 _NLLB_TO_QWEN_LANG = {
     "jpn_Jpan": "Japanese",

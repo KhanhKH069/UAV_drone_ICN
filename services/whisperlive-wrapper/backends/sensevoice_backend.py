@@ -10,7 +10,7 @@ from .base import BaseASRBackend, ASRResult
 
 os.environ["MODELSCOPE_CACHE"] = os.getenv("MODELSCOPE_CACHE", "/models")
 
-logger = logging.getLogger("paraline.asr.sensevoice")
+logger = logging.getLogger("uav_drone.asr.sensevoice")
 
 _NLLB_TO_SV = {
     "jpn_Jpan": "ja",

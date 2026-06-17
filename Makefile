@@ -1,5 +1,5 @@
 # ============================================================
-# Paraline MSAgent — Makefile
+# UAV_drone_ICN — Makefile
 # Inspired by Vexa's Makefile (make all / make up / make logs)
 # ============================================================
 
@@ -8,11 +8,10 @@
 ## Full setup: env → build → up (run once on fresh server)
 all: env build up
 	@echo ""
-	@echo "🟠 Paraline MSAgent is running!"
+	@echo "🚁 UAV_drone_ICN Edge Server is running!"
 	@echo "   API Gateway:  http://localhost:8056"
-	@echo "   Admin API:    http://localhost:8057"
-	@echo "   WebSocket:    ws://localhost:8765"
 	@echo "   Docs:         http://localhost:8056/docs"
+	@echo "   WebSocket:    ws://localhost:8765"
 	@echo ""
 
 ## Create .env from example (skips if already exists)
@@ -68,11 +67,8 @@ ps:
 health:
 	@echo "Checking service health..."
 	@curl -sf http://localhost:8056/health && echo "✅ api-gateway" || echo "❌ api-gateway"
-	@curl -sf http://localhost:8057/health && echo "✅ admin-api" || echo "❌ admin-api"
 	@curl -sf http://localhost:8001/health && echo "✅ whisperlive" || echo "❌ whisperlive"
 	@curl -sf http://localhost:8002/health && echo "✅ translation" || echo "❌ translation"
-	@curl -sf http://localhost:8003/health && echo "✅ tts" || echo "❌ tts"
-	@curl -sf http://localhost:8004/health && echo "✅ vision" || echo "❌ vision"
 	@curl -sf http://localhost:8005/health && echo "✅ agent" || echo "❌ agent"
 
 ## Download AI models (run BEFORE first `make up`)

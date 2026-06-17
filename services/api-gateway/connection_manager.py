@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import Dict, List
 from fastapi import WebSocket
 
-logger = logging.getLogger("paraline.connmgr")
+logger = logging.getLogger("uav_drone.connmgr")
 
 
 class ConnectionManager:
@@ -29,6 +29,12 @@ class ConnectionManager:
             conns.remove(ws)
         if not conns:
             self._connections.pop(session_id, None)
+
+    def count(self, session_id: str | None = None) -> int:
+        """Return the number of active connections (total, or per session_id)."""
+        if session_id:
+            return len(self._connections.get(session_id, []))
+        return sum(len(v) for v in self._connections.values())
 
     async def broadcast(self, session_id: str, message: dict):
         for ws in self._connections.get(session_id, []):

@@ -2,7 +2,7 @@
 
 ## Tổng quan
 
-Tài liệu này hướng dẫn cách khởi động `paraline-msagent` như một **Tầng 3 Edge Server** cho hệ thống điều khiển UAV bằng ngôn ngữ tự nhiên (theo kiến trúc đồ án *Vũ Nam Khánh et al., 2026*).
+Tài liệu này hướng dẫn cách khởi động `UAV_drone_ICN` như một **Tầng 3 Edge Server** cho hệ thống điều khiển UAV bằng ngôn ngữ tự nhiên (theo kiến trúc đồ án *Vũ Nam Khánh et al., 2026*).
 
 ```
 Raspberry Pi 5 (Tầng 1 + 2)          Edge Server / RTX A4000 (Tầng 3)
@@ -40,8 +40,8 @@ Raspberry Pi 5 (Tầng 1 + 2)          Edge Server / RTX A4000 (Tầng 3)
 
 ```bash
 # Clone repo (nếu chưa có)
-git clone https://github.com/KhanhKH069/paraline-msagent.git
-cd paraline-msagent
+git clone https://github.com/KhanhKH069/UAV_drone_ICN.git
+cd UAV_drone_ICN
 git checkout real-time-text
 
 # Tạo file cấu hình cho Drone
@@ -71,7 +71,7 @@ CLIENT_API_KEY=<chuỗi ngẫu nhiên mạnh>
 
 ```bash
 # Tải Whisper model
-docker run --rm -v paraline-msagent_models-cache:/models \
+docker run --rm -v UAV_drone_ICN_models-cache:/models \
   python:3.11-slim bash -c \
   "pip install faster-whisper && python -c \"
 from faster_whisper import WhisperModel

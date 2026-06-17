@@ -15,7 +15,7 @@ def export_openapi():
                 title=app.title,
                 version=app.version,
                 openapi_version=app.openapi_version,
-                description=app.description,
+                description="UAV Voice Control System — Edge AI, 100% offline",
                 routes=app.routes,
             ),
             f,

@@ -32,9 +32,9 @@ Server AI là bộ não xử lý giọng nói, chạy trên Docker. Bạn cần 
 
 1. Bật phần mềm **Docker Desktop** trên Windows của bạn.
 2. Mở Terminal (Command Prompt hoặc PowerShell).
-3. Di chuyển vào thư mục dự án `paraline-msagent`:
+3. Di chuyển vào thư mục dự án `UAV_drone_ICN`:
    ```powershell
-   cd d:\paraline-msagent
+   cd d:\UAV_drone_ICN
    ```
 4. Khởi chạy cụm Microservices bằng docker-compose:
    ```powershell
@@ -48,7 +48,7 @@ Server AI là bộ não xử lý giọng nói, chạy trên Docker. Bạn cần 
 
 Bây giờ bạn sẽ chạy file Client (code đáng lẽ sẽ nằm trên Raspberry Pi) nhưng chạy thẳng trên Windows của bạn. Máy tính sẽ đóng vai trò vừa là Pi, vừa là bộ điều khiển.
 
-1. Mở một cửa sổ Terminal mới, vẫn đứng ở thư mục dự án `paraline-msagent`.
+1. Mở một cửa sổ Terminal mới, vẫn đứng ở thư mục dự án `UAV_drone_ICN`.
 2. Khởi chạy file client, nhưng thay vì chỉ định cổng UART thật, chúng ta trỏ tới cổng TCP của bộ giả lập:
    ```powershell
    python scripts/drone_edge_client.py --connect tcp:127.0.0.1:5760

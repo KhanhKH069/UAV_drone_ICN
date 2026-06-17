@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("paraline.nllb")
+logger = logging.getLogger("uav_drone.nllb")
 
 MODEL_NAME = os.getenv("NLLB_MODEL", "facebook/nllb-200-distilled-600M")
 CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "/models/nllb")
@@ -27,7 +27,7 @@ _model = AutoModelForSeq2SeqLM.from_pretrained(
     torch_dtype=torch.float16,
 ).to(DEVICE)
 
-app = FastAPI(title="Paraline Translation Optimized")
+app = FastAPI(title="UAV_drone_ICN Translation")
 
 class TransReq(BaseModel):
     text: str

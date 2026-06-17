@@ -163,7 +163,7 @@ def main():
     print("\n---------------------------------------------------------")
     print("💡 Hướng dẫn đưa vào Ollama:")
     print("1. Tạo file Modelfile (nội dung: FROM ./drone_model/unsloth.Q4_K_M.gguf)")
-    print("2. Chạy lệnh: ollama create paraline-drone-ai -f Modelfile")
+    print("2. Chạy lệnh: ollama create uav-drone-icn-ai -f Modelfile")
     print("---------------------------------------------------------")
 
 

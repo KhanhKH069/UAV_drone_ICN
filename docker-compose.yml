@@ -1,8 +1,8 @@
 version: "3.9"
 
 # ============================================================
-# Paraline Drone Edge Server — Docker Compose
-# Tái sử dụng kiến trúc paraline-msagent cho UAV v2.0
+# UAV_drone_ICN Edge Server — Docker Compose
+# Tái sử dụng kiến trúc UAV_drone_ICN cho UAV v2.0
 #
 # Services được kích hoạt:
 #   - api-gateway    (cổng giao tiếp với Raspberry Pi 5)

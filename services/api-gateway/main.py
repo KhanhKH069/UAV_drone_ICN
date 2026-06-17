@@ -1,44 +1,34 @@
-import asyncio
 import logging
 import os
-import time
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers.sessions import router as sessions_router
-from routers.images   import router as images_router
-from routers.agent    import router as agent_router
-from routers.mock     import router as mock_router
-from routers.drone    import router as drone_router
-from routers.auth     import router as auth_router
-from pipeline import AudioPipeline
-from connection_manager import ConnectionManager
+from routers.drone import router as drone_router
+from routers.auth  import router as auth_router
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
-logger = logging.getLogger("paraline.gateway")
+logger = logging.getLogger("uav_drone.gateway")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Paraline MSAgent API Gateway starting...")
+    logger.info("UAV_drone_ICN API Gateway starting...")
     logger.info(f"  WhisperLive  -> {os.getenv('WHISPERLIVE_URL')}")
-    logger.info(f"  Translation  -> {os.getenv('TRANSLATION_URL')}")
-    logger.info(f"  Vision       -> {os.getenv('VISION_URL')}")
     logger.info(f"  Agent        -> {os.getenv('AGENT_URL')}")
     yield
-    logger.info("Paraline MSAgent shutting down.")
+    logger.info("UAV_drone_ICN Gateway shutting down.")
 
 
 app = FastAPI(
-    title="Paraline MSAgent API",
-    description="VMG Internal AI Translation Server — 100% offline on VMG_STAFF",
-    version="1.0.0",
+    title="UAV_drone_ICN API Gateway",
+    description="UAV Voice Control System — Edge AI, 100% offline",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -49,82 +39,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-app.include_router(sessions_router, prefix="/sessions", tags=["Sessions"])
-app.include_router(images_router,   prefix="/translate", tags=["Image Translation"])
-app.include_router(agent_router,    prefix="/agent",     tags=["Meeting Agent"])
-app.include_router(mock_router,     prefix="/mock",      tags=["Mock Testing"])
-app.include_router(drone_router, tags=["Drone UAV"])
-
-connection_manager = ConnectionManager()
-pipeline = AudioPipeline()
-
-
-@app.websocket("/ws/audio/{session_id}")
-async def ws_audio_endpoint(
-    websocket: WebSocket,
-    session_id: str,
-    direction: str = Query("inbound", regex="^(inbound|outbound)$"),
-    api_key: str = Query(""),
-):
-    if api_key != os.getenv("CLIENT_API_KEY", ""):
-        await websocket.close(code=4001, reason="Unauthorized")
-        return
-
-    await connection_manager.connect(websocket, session_id, direction)
-    logger.info(f"WS connected: session={session_id[:8]} direction={direction}")
-
-    queue = asyncio.Queue()
-
-    async def _worker():
-        while True:
-            frame = await queue.get()
-            if frame is None:
-                break
-            try:
-                is_final = frame.get("is_final", True)
-                await pipeline.process(frame, session_id, direction, websocket, is_final=is_final)
-            except Exception as e:
-                logger.error(f"Pipeline error in worker: {e}")
-            finally:
-                queue.task_done()
-
-    _ = asyncio.create_task(_worker())
-
-    try:
-        last_frame_time = time.perf_counter()
-        min_frame_time = 1.0 / 30.0
-
-        while True:
-            frame = await websocket.receive_json()
-            
-            now = time.perf_counter()
-            dt = now - last_frame_time
-            if dt < min_frame_time:
-                await asyncio.sleep(min_frame_time - dt)
-                now = time.perf_counter()
-
-            last_frame_time = now
-            await queue.put(frame)
-    except WebSocketDisconnect:
-        logger.info(f"WS disconnected: session={session_id[:8]}")
-    except Exception as e:
-        logger.error(f"WS error [{session_id[:8]}]: {e}")
-        try:
-            await websocket.send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
-    finally:
-        await queue.put(None)
-        connection_manager.disconnect(websocket, session_id)
+app.include_router(auth_router,   prefix="/auth",  tags=["Authentication"])
+app.include_router(drone_router,  tags=["Drone UAV"])
 
 
 @app.get("/health")
 async def health():
     return {
         "status": "ok",
-        "service": "paraline-api-gateway",
-        "version": "1.0.0",
+        "service": "uav-drone-icn-gateway",
+        "version": "2.0.0",
     }
 
 

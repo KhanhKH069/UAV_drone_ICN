@@ -1,42 +1,42 @@
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
 import json
 import logging
 import os
 import re
 import time
 from collections import OrderedDict, deque
-from typing import List, Optional
+from typing import Optional
 
 import httpx
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from prompts import SUMMARY_PROMPT, ACTION_ITEMS_PROMPT
-from drone_prompts import DRONE_CLASSIFY_PROMPT, DRONE_MULTI_CLASSIFY_PROMPT
+from drone_prompts import DRONE_CLASSIFY_PROMPT
 
-logger = logging.getLogger("paraline.agent")
+logger = logging.getLogger("uav_drone.agent")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3:8b")
-COLLECTOR_URL = os.getenv("COLLECTOR_URL", "http://transcription-collector:8006")
 
 _http = httpx.AsyncClient(timeout=120.0)
 
 
+async def _prewarm_after_delay():
+    await asyncio.sleep(5)
+    await _prewarm_cache()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async def prewarm_task():
-        await asyncio.sleep(5)
-        await _prewarm_cache()
-    asyncio.create_task(prewarm_task())
+    task = asyncio.create_task(_prewarm_after_delay())
     yield
+    task.cancel()
 
 
-app = FastAPI(title="Paraline Agent Service", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="UAV_drone_ICN Agent Service", version="2.0.0", lifespan=lifespan)
 
 _PREWARM_COMMANDS = [
     "dừng khẩn cấp",
@@ -61,79 +61,6 @@ _CACHE_MAX_SIZE = 100
 _LATENCY_WINDOW = 200
 _classify_latencies: deque = deque(maxlen=_LATENCY_WINDOW)
 
-
-class ActionItem(BaseModel):
-    task: str
-    assignee: Optional[str] = None
-    deadline: Optional[str] = None
-    priority: str = "medium"
-
-
-class MeetingMinutesResp(BaseModel):
-    session_id: str
-    summary: str
-    key_points: List[str] = []
-    action_items: List[ActionItem] = []
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
-    total_latency_ms: float = 0.0
-
-
-@app.post("/agent/summarize/{session_id}", response_model=MeetingMinutesResp)
-async def summarize(session_id: str):
-    t0 = time.perf_counter()
-    try:
-        resp = await _http.get(f"{COLLECTOR_URL}/sessions/{session_id}/export")
-        resp.raise_for_status()
-        transcript = resp.json().get("transcript", "")
-
-        if not transcript.strip():
-            raise HTTPException(404, "No transcript found for this session")
-
-        summary_raw, actions_raw = await _run_parallel(transcript)
-
-        summary, key_points = _parse_summary(summary_raw)
-        action_items = _parse_actions(actions_raw)
-
-        ms = (time.perf_counter() - t0) * 1000
-        logger.info(f"Meeting minutes generated in {ms:.0f}ms for {session_id[:8]}")
-
-        return MeetingMinutesResp(
-            session_id=session_id,
-            summary=summary,
-            key_points=key_points,
-            action_items=action_items,
-            total_latency_ms=round(ms, 1),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Agent error: {e}", exc_info=True)
-        raise HTTPException(500, str(e))
-
-
-async def _run_parallel(transcript: str):
-    summary_task = _call_llm(SUMMARY_PROMPT.format(transcript=transcript))
-    actions_task = _call_llm(ACTION_ITEMS_PROMPT.format(transcript=transcript))
-    return await asyncio.gather(summary_task, actions_task)
-
-
-async def _call_llm(prompt: str) -> str:
-    resp = await _http.post(
-        f"{OLLAMA_HOST}/api/generate",
-        json={
-            "model": LLM_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "num_predict": 1024,
-            },
-        },
-    )
-    resp.raise_for_status()
-    return resp.json().get("response", "")
-
-
 async def _call_llm_json(prompt: str) -> str:
     resp = await _http.post(
         f"{OLLAMA_HOST}/api/generate",
@@ -150,28 +77,6 @@ async def _call_llm_json(prompt: str) -> str:
     )
     resp.raise_for_status()
     return resp.json().get("response", "")
-
-
-def _parse_summary(raw: str):
-    lines = [line.strip() for line in raw.strip().splitlines() if line.strip()]
-    summary = lines[0] if lines else raw.strip()
-    key_points = [
-        line.lstrip("-•* ").strip()
-        for line in lines[1:]
-        if line.startswith(("-", "•", "*", "–"))
-    ]
-    return summary, key_points[:10]
-
-
-def _parse_actions(raw: str) -> List[ActionItem]:
-    try:
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        if m:
-            items = json.loads(m.group())
-            return [ActionItem(**item) for item in items if "task" in item]
-    except Exception:
-        pass
-    return []
 
 
 @app.get("/health")

@@ -1,6 +1,6 @@
 @echo off
 echo ==============================================
-echo 🛸 PARALINE MS-AGENT - START SITL SIMULATOR
+echo 🛸 UAV_drone_ICN - START SITL SIMULATOR
 echo ==============================================
 echo.
 echo Kiểm tra và cài đặt thư viện dronekit-sitl...

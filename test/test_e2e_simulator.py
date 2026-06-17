@@ -105,7 +105,7 @@ async def run_simulator(gateway_url, token, drone_id, lang):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Paraline MSAgent E2E Integration Simulator"
+        description="UAV_drone_ICN E2E Integration Simulator"
     )
     parser.add_argument(
         "--gateway-url", default=DEFAULT_GATEWAY_URL, help="Gateway base HTTP URL"
@@ -125,7 +125,7 @@ def main():
     args = parser.parse_args()
 
     print("==========================================================")
-    print("      PARALINE MSAGENT E2E SIMULATOR")
+    print("      UAV_drone_ICN E2E SIMULATOR")
     print("==========================================================")
 
     token = asyncio.run(

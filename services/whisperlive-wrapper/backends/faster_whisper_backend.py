@@ -7,7 +7,7 @@ import numpy as np
 
 from .base import BaseASRBackend, ASRResult
 
-logger = logging.getLogger("paraline.asr.faster_whisper")
+logger = logging.getLogger("uav_drone.asr.faster_whisper")
 
 _ALLOWED_LANGS = {"ja", "en", "vi"}
 
