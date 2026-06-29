@@ -19,13 +19,12 @@ from ultralytics import YOLO
 
 logger = logging.getLogger("gcs_vision")
 
-# ─── ANSI color codes for terminal output ───────────────────────────────────
-_R = "\033[91m"   # Red
-_G = "\033[92m"   # Green
-_Y = "\033[93m"   # Yellow
-_C = "\033[96m"   # Cyan
-_W = "\033[97m"   # White
-_RST = "\033[0m"  # Reset
+_R = "\033[91m"
+_G = "\033[92m"
+_Y = "\033[93m"
+_C = "\033[96m"
+_W = "\033[97m"
+_RST = "\033[0m"
 
 
 def vision_tracking_loop(state, controller, video_source=1):
@@ -39,8 +38,6 @@ def vision_tracking_loop(state, controller, video_source=1):
         controller: UAVController object
         video_source: ID camera hoặc đường dẫn file video
     """
-    # Import DroneKit-dependent classes chỉ khi chạy trong mode đầy đủ
-    from gcs_flight_controller import DroneState, UAVController, PIDController
     _run_tracking(state, controller, video_source, standalone=False)
 
 
@@ -50,43 +47,35 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
 
     logger.info("📷 Khởi động luồng Computer Vision (YOLOv8 Medium + ByteTrack)...")
 
-    # ── 1. Load Model ──────────────────────────────────────────────────────
     model = _load_yolo_model()
     if model is None:
         logger.error("❌ Không thể tải YOLOv8. Luồng Vision dừng lại.")
         return
 
-    # ── 2. Khởi tạo Camera ────────────────────────────────────────────────
     cap = _open_camera(video_source)
     if cap is None:
         logger.error("❌ Mất tín hiệu Video. Luồng Vision tạm dừng.")
         return
 
-    # ── 3. Khởi tạo PID Controllers ───────────────────────────────────────
-    # Theo báo cáo (Ziegler-Nichols): dt = 50ms tương đương ~20 FPS
     dt = 0.05
     pid_yaw      = PIDController(Kp=0.35, Ki=0.00, Kd=0.05, dt=dt)
     pid_throttle = PIDController(Kp=0.40, Ki=0.02, Kd=0.08, dt=dt)
     pid_pitch    = PIDController(Kp=0.30, Ki=0.01, Kd=0.06, dt=dt)
 
-    # ── 4. Camera settings ────────────────────────────────────────────────
     REF_WIDTH, REF_HEIGHT = 640, 480
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, REF_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, REF_HEIGHT)
 
-    # Confidence threshold: chỉ track khi model chắc chắn > 50%
     CONFIDENCE_THRESHOLD = 0.50
 
-    # ── 5. FPS tracking ───────────────────────────────────────────────────
     fps_counter = FPSCounter(window=30)
 
     logger.info(f"✅ Vision & PID sẵn sàng. Confidence threshold: {CONFIDENCE_THRESHOLD:.0%}")
     if standalone:
         logger.info(f"{_Y}[STANDALONE MODE]{_RST} Nhấn 'q' để thoát, 'f' để bật Follow simulation.")
 
-    # ── 6. Main Loop ──────────────────────────────────────────────────────
-    target_class = "person"  # Default cho standalone mode
-    is_tracking_sim = False   # Chỉ dùng trong standalone mode
+    target_class = "person"
+    is_tracking_sim = False
 
     while True:
         if not cap.isOpened():
@@ -100,7 +89,6 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
 
         fps_counter.tick()
 
-        # Kiểm tra trạng thái tracking
         if standalone:
             should_track = is_tracking_sim
             target_cls = target_class
@@ -111,7 +99,6 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
             vehicle_ok = controller.vehicle is not None
 
         if not should_track or not vehicle_ok:
-            # Hiển thị frame gốc với thông tin idle
             _draw_idle_overlay(frame, fps_counter.fps, standalone, is_tracking_sim if standalone else False)
             cv2.imshow("GCS Vision Tracking", frame)
             key = cv2.waitKey(1) & 0xFF
@@ -120,20 +107,18 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
             if standalone and key == ord("f"):
                 is_tracking_sim = not is_tracking_sim
                 logger.info(f"Toggle tracking: {'ON' if is_tracking_sim else 'OFF'}")
-            # Reset PID khi không tracking để tránh integral wind-up
             pid_yaw.reset()
             pid_throttle.reset()
             pid_pitch.reset()
             time.sleep(0.05)
             continue
 
-        # ── Tracking với YOLOv8 + ByteTrack ────────────────────────────
         results = model.track(
             frame,
             tracker="bytetrack.yaml",
             persist=True,
             verbose=False,
-            conf=CONFIDENCE_THRESHOLD,  # Lọc tại inference level
+            conf=CONFIDENCE_THRESHOLD,
         )
 
         target_found = False
@@ -156,23 +141,19 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
                     cy = (y1 + y2) / 2.0
                     bbox_h = y2 - y1
 
-                    # Tính toán sai số
                     error_x = cx - (REF_WIDTH / 2.0)
                     error_y = cy - (REF_HEIGHT / 2.0)
 
-                    # Ước lượng depth qua bounding box height
                     ref_bbox_h = 200.0
                     error_z = ref_bbox_h - bbox_h
 
-                    # Adaptive Kp cho pitch (dựa vào khoảng cách ước lượng)
                     if bbox_h > 250:
-                        pid_pitch.Kp = 0.15  # Mục tiêu gần, giảm tốc
+                        pid_pitch.Kp = 0.15
                     elif bbox_h < 100:
-                        pid_pitch.Kp = 0.45  # Mục tiêu xa, tăng tốc
+                        pid_pitch.Kp = 0.45
                     else:
-                        pid_pitch.Kp = 0.30  # Bình thường
+                        pid_pitch.Kp = 0.30
 
-                    # PID compute
                     raw_yaw = pid_yaw.compute(error_x)
                     velocity_yaw_rate = np.clip(raw_yaw / 100.0, -0.5, 0.5)
 
@@ -184,16 +165,14 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
 
                     target_found = True
 
-                    # Vẽ visualizations lên frame
                     _draw_tracking_overlay(
                         frame, x1, y1, x2, y2, cx, cy,
                         cls_name, conf, error_x, error_y,
                         velocity_yaw_rate, velocity_z, velocity_x,
                         REF_WIDTH, REF_HEIGHT
                     )
-                    break  # Chỉ theo dõi target đầu tiên tìm thấy
+                    break
 
-        # ── Gửi lệnh MAVLink ──────────────────────────────────────────
         failsafe_ok = True
         if not standalone:
             failsafe_ok = not state.failsafe_triggered
@@ -206,7 +185,6 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
                     vz=velocity_z,
                     yaw_rate=velocity_yaw_rate,
                 )
-            # Log PID output
             logger.debug(
                 f"PID → yaw_rate={velocity_yaw_rate:+.3f} vz={velocity_z:+.3f} vx={velocity_x:+.3f} "
                 f"| err_x={error_x:+.1f} err_y={error_y:+.1f}"
@@ -214,15 +192,12 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
         else:
             if not standalone and vehicle_ok:
                 controller.send_continuous_velocity_and_yaw(0, 0, 0, 0)
-            # Reset PID khi mất mục tiêu để tránh integral wind-up
             pid_yaw.reset()
             pid_throttle.reset()
             pid_pitch.reset()
 
-        # ── Hiển thị FPS trên frame ───────────────────────────────────
         _draw_fps(frame, fps_counter.fps)
 
-        # In trạng thái ra terminal mỗi 2 giây
         current_fps = fps_counter.fps if fps_counter.fps > 0 else 20
         if fps_counter.frame_count % max(1, int(current_fps * 2)) == 0:
             status = "🎯 TRACKING" if target_found else "👁️  SCANNING"
@@ -245,11 +220,10 @@ def _run_tracking(state, controller, video_source=0, standalone=False):
 
     cap.release()
     cv2.destroyAllWindows()
-    print()  # Newline sau progress line
+    print()
     logger.info("📷 Luồng Vision đã dừng.")
 
 
-# ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def _load_yolo_model():
     """Load YOLOv8 lên GPU hoặc fallback sang CPU."""
@@ -293,24 +267,19 @@ def _draw_tracking_overlay(frame, x1, y1, x2, y2, cx, cy,
     cx, cy = int(cx), int(cy)
     center_x, center_y = frame_w // 2, frame_h // 2
 
-    # Bounding box (xanh lá)
     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 80), 2)
 
-    # Label + confidence
     label = f"{cls_name} {conf:.0%}"
     (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
     cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 200, 60), -1)
     cv2.putText(frame, label, (x1 + 2, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
 
-    # Crosshair trên trung tâm frame
     cv2.line(frame, (center_x - 20, center_y), (center_x + 20, center_y), (255, 255, 255), 1)
     cv2.line(frame, (center_x, center_y - 20), (center_x, center_y + 20), (255, 255, 255), 1)
 
-    # Đường nối từ trung tâm frame đến trung tâm mục tiêu (PID error visual)
-    error_color = (0, 140, 255)  # Cam
+    error_color = (0, 140, 255)
     cv2.arrowedLine(frame, (center_x, center_y), (cx, cy), error_color, 2, tipLength=0.15)
 
-    # PID Error bar ở góc dưới bên trái
     _draw_pid_bars(frame, error_x, error_y, yaw_rate, vz, vx, frame_w, frame_h)
 
 
@@ -329,9 +298,7 @@ def _draw_pid_bars(frame, error_x, error_y, yaw_rate, vz, vx, frame_w, frame_h):
     ]
     for i, (label, val, (vmin, vmax), color) in enumerate(params):
         y = bar_y + i * gap
-        # Background bar
         cv2.rectangle(frame, (bar_x, y), (bar_x + bar_w, y + bar_h), (50, 50, 50), -1)
-        # Fill bar (normalized 0..1 từ giữa)
         norm = (val - vmin) / (vmax - vmin)
         fill = int(norm * bar_w)
         mid = bar_w // 2
@@ -339,9 +306,7 @@ def _draw_pid_bars(frame, error_x, error_y, yaw_rate, vz, vx, frame_w, frame_h):
             cv2.rectangle(frame, (bar_x + mid, y), (bar_x + fill, y + bar_h), color, -1)
         else:
             cv2.rectangle(frame, (bar_x + fill, y), (bar_x + mid, y + bar_h), color, -1)
-        # Center line
         cv2.line(frame, (bar_x + mid, y - 1), (bar_x + mid, y + bar_h + 1), (200, 200, 200), 1)
-        # Label
         cv2.putText(frame, f"{label}:{val:+.2f}", (bar_x - 5, y + 7),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35, (220, 220, 220), 1)
 
@@ -350,7 +315,6 @@ def _draw_idle_overlay(frame, fps, standalone, sim_tracking):
     """Vẽ overlay khi không tracking."""
     h, w = frame.shape[:2]
     cx, cy = w // 2, h // 2
-    # Crosshair mờ
     cv2.line(frame, (cx - 25, cy), (cx + 25, cy), (100, 100, 100), 1)
     cv2.line(frame, (cx, cy - 25), (cx, cy + 25), (100, 100, 100), 1)
 
@@ -389,7 +353,6 @@ class FPSCounter:
             self.fps = (len(self.timestamps) - 1) / elapsed if elapsed > 0 else 0.0
 
 
-# ─── Standalone Entry Point ───────────────────────────────────────────────────
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -414,14 +377,13 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════╝
 """)
 
-    # Tạo mock state để chạy standalone
     class MockState:
         is_tracking = False
         target_class = args.target
         failsafe_triggered = False
 
     class MockController:
-        vehicle = "mock"  # Truthy để không bị skip
+        vehicle = "mock"
         def send_continuous_velocity_and_yaw(self, *a, **kw): pass
 
     _run_tracking(MockState(), MockController(), video_source=args.source, standalone=True)

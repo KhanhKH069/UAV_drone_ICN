@@ -17,7 +17,7 @@ _NLLB_TO_SV = {
     "eng_Latn": "en",
     "kor_Hang": "ko",
     "zho_Hans": "zh",
-    "vie_Latn": "auto",
+    "vie_Latn": "vi",
 }
 
 class SenseVoiceBackend(BaseASRBackend):
@@ -56,8 +56,9 @@ class SenseVoiceBackend(BaseASRBackend):
         t0 = time.perf_counter()
 
         sv_lang = _NLLB_TO_SV.get(language, language) if language else "auto"
-        if sv_lang not in ["ja", "en", "ko", "zh", "yue", "auto"]:
+        if sv_lang not in ["ja", "en", "ko", "zh", "yue", "vi", "auto"]:
             sv_lang = "auto"
+
 
         duration_sec = len(audio_np) / sample_rate
 

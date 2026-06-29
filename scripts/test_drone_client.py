@@ -29,14 +29,11 @@ import wave
 import numpy as np
 import websockets
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Config — đổi IP nếu Edge Server không phải localhost
-# ─────────────────────────────────────────────────────────────────────────────
 SERVER_HOST = "localhost"
 SERVER_PORT = 8765
 API_KEY = "drone-secret"
 DRONE_ID = "rpi5-test-01"
-CHUNK_MS = 500  # Gửi audio theo từng chunk 500ms
+CHUNK_MS = 500
 SAMPLE_RATE = 16000
 
 
@@ -90,27 +87,21 @@ async def test_with_text(text: str, lang: str):
     print(f"\n🚁 Kết nối tới: {uri}")
     print(f"📝 Gửi text test: '{text}' (lang={lang})\n")
 
-    # Tạo audio giả (1 giây silence) — Whisper sẽ được bypass bởi MOCK_TRANSCRIPTION_TEXT
-    # hoặc chúng ta gửi thẳng qua endpoint REST để test nhanh
     print("  💡 Tip: Để test text mode, dùng lệnh curl sau:")
     print(
         f"  curl -X POST http://{SERVER_HOST}:8005/drone/classify -H 'Content-Type: application/json' -d '{{\"text\": \"{text}\"}}'"
     )
     print()
 
-    # Tạo 1s silence audio để mở kết nối, rồi trigger endpoint
     silence = np.zeros(SAMPLE_RATE, dtype=np.int16)
     audio_bytes = silence.tobytes()
 
     try:
         async with websockets.connect(uri) as ws:
             print("  ✅ WebSocket connected!")
-            # Gửi 1 chunk silence
             await ws.send(audio_bytes)
-            # Báo endpoint để trigger kết quả
             await ws.send(json.dumps({"event": "endpoint"}))
 
-            # Nhận kết quả
             try:
                 response = await asyncio.wait_for(ws.recv(), timeout=10.0)
                 msg = json.loads(response)
@@ -130,7 +121,6 @@ async def test_with_wav(wav_path: str, lang: str, use_opus: bool = False):
     print(f"\n🚁 Kết nối tới: {uri}")
     print(f"📁 File audio: {wav_path}\n")
 
-    # Đọc WAV
     with wave.open(wav_path, "rb") as wf:
         channels = wf.getnchannels()
         sample_rate = wf.getframerate()
@@ -138,18 +128,16 @@ async def test_with_wav(wav_path: str, lang: str, use_opus: bool = False):
 
     audio_np = np.frombuffer(raw_audio, dtype=np.int16)
 
-    # Convert stereo → mono
     if channels == 2:
         audio_np = audio_np.reshape(-1, 2).mean(axis=1).astype(np.int16)
 
-    # Resample nếu cần (đơn giản — dùng scipy nếu cần chính xác hơn)
     if sample_rate != SAMPLE_RATE:
         from scipy.signal import resample
 
         num_samples = int(len(audio_np) * SAMPLE_RATE / sample_rate)
         audio_np = resample(audio_np, num_samples).astype(np.int16)
 
-    chunk_size = int(SAMPLE_RATE * CHUNK_MS / 1000)  # Số samples mỗi chunk
+    chunk_size = int(SAMPLE_RATE * CHUNK_MS / 1000)
 
     try:
         async with websockets.connect(uri) as ws:
@@ -157,7 +145,6 @@ async def test_with_wav(wav_path: str, lang: str, use_opus: bool = False):
                 f"  ✅ WebSocket connected! Đang stream {len(audio_np) / SAMPLE_RATE:.1f}s audio...\n"
             )
 
-            # Stream từng chunk
             for i in range(0, len(audio_np), chunk_size):
                 chunk_np = audio_np[i : i + chunk_size]
                 if use_opus:
@@ -171,20 +158,17 @@ async def test_with_wav(wav_path: str, lang: str, use_opus: bool = False):
                     chunk = chunk_np.tobytes()
 
                 await ws.send(chunk)
-                await asyncio.sleep(CHUNK_MS / 1000)  # Giả lập realtime
+                await asyncio.sleep(CHUNK_MS / 1000)
 
-                # Check partial result
                 try:
                     msg = await asyncio.wait_for(ws.recv(), timeout=0.01)
                     _print_result(json.loads(msg))
                 except asyncio.TimeoutError:
                     pass
 
-            # Báo kết thúc câu
             print("\n  📨 Gửi endpoint signal...")
             await ws.send(json.dumps({"event": "endpoint"}))
 
-            # Nhận kết quả cuối
             try:
                 while True:
                     response = await asyncio.wait_for(ws.recv(), timeout=15.0)
@@ -234,7 +218,6 @@ async def test_with_mic(lang: str, use_opus: bool = False):
                 is_listening = True
                 try:
                     while is_listening:
-                        # Gửi chunk audio
                         chunk_bytes = await audio_queue.get()
                         if use_opus:
                             import soundfile as sf
@@ -251,7 +234,6 @@ async def test_with_mic(lang: str, use_opus: bool = False):
                             chunk = chunk_bytes
                         await ws.send(chunk)
 
-                        # Check partial results không blocking
                         try:
                             msg = await asyncio.wait_for(ws.recv(), timeout=0.01)
                             _print_result(json.loads(msg))
@@ -262,7 +244,6 @@ async def test_with_mic(lang: str, use_opus: bool = False):
                     print("\n\n  ⏹️  Kết thúc ghi âm, gửi endpoint...")
                     await ws.send(json.dumps({"event": "endpoint"}))
 
-                    # Nhận kết quả cuối
                     try:
                         while True:
                             response = await asyncio.wait_for(ws.recv(), timeout=15.0)
@@ -288,25 +269,10 @@ async def test_classify_rest(text: str, lang: str):
     print(f"\n🚁 Test REST endpoint: POST {url}")
     print(f"📝 Text: '{text}' (lang={lang})\n")
 
-    # Nếu lệnh tiếng Việt → dịch sang tiếng Anh trước
-    en_text = text
-    if lang == "vi":
-        print("  🌐 Đang dịch Việt → Anh qua NLLB...")
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"http://{SERVER_HOST}:8002/translate",
-                    json={"text": text, "src_lang": "vie_Latn", "tgt_lang": "eng_Latn"},
-                )
-                en_text = resp.json().get("translated_text", text)
-                print(f"  ✅ Dịch xong: '{en_text}'\n")
-        except Exception as e:
-            print(f"  ⚠️ NLLB không khả dụng: {e}")
-
     t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json={"text": en_text})
+            resp = await client.post(url, json={"text": text})
             data = resp.json()
             latency = (time.perf_counter() - t0) * 1000
 

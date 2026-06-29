@@ -7,7 +7,7 @@ version: "3.9"
 # Services được kích hoạt:
 #   - api-gateway    (cổng giao tiếp với Raspberry Pi 5)
 #   - whisperlive    (STT: Faster-Whisper)
-#   - translation    (NLLB: dịch Việt→Anh cho lệnh tiếng Việt)
+#   - translation    (NLLB: dịch Việt→Anh - ĐÃ VÔ HIỆU HÓA vì NLP xử lý trực tiếp tiếng Việt)
 #   - agent-service  (Ollama: phân loại intent 28 lệnh bay)
 #   - ollama         (LLM runtime: Llama3/Gemma3)
 #   - redis          (Queue bất đồng bộ nội bộ)
@@ -39,9 +39,16 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
     networks: [ drone-net ]
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:80" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ──────────────────────────────────────────────────────────
   # API Gateway — Cổng WebSocket cho Raspberry Pi 5
@@ -57,7 +64,6 @@ services:
       - "8765:8765"   # WebSocket audio stream (nội bộ, hoặc không đi qua WSS)
     environment:
       - WHISPERLIVE_URL=http://whisperlive:8001
-      - TRANSLATION_URL=http://translation-service:8002
       - AGENT_URL=http://agent-service:8005
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required but not set}
@@ -68,10 +74,12 @@ services:
       - VISION_URL=
       - COLLECTOR_URL=
     depends_on:
-      - whisperlive
-      - translation-service
-      - agent-service
-      - redis
+      whisperlive:
+        condition: service_healthy
+      agent-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks: [ drone-net ]
     restart: unless-stopped
     healthcheck:
@@ -116,36 +124,36 @@ services:
       retries: 5
       start_period: 60s
 
-  # ──────────────────────────────────────────────────────────
-  # Translation Service — NLLB-200
-  # Dịch lệnh tiếng Việt → tiếng Anh để Regex/LLM xử lý
-  # Có thể tắt nếu phi công chỉ ra lệnh bằng tiếng Anh
-  # ──────────────────────────────────────────────────────────
-  translation-service:
-    build:
-      context: ./services/translation-service
-      dockerfile: Dockerfile
-    container_name: drone-nllb
-    ports:
-      - "8002:8002"
-    volumes:
-      - models-cache:/models
-    environment:
-      - NLLB_MODEL=${NLLB_MODEL:-facebook/nllb-200-distilled-600M}
-      - MODEL_CACHE_DIR=/models/nllb
-    networks: [ drone-net ]
-    restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
-      interval: 60s
-      start_period: 90s
+  # # ──────────────────────────────────────────────────────────
+  # # Translation Service — NLLB-200
+  # # Dịch lệnh tiếng Việt → tiếng Anh để Regex/LLM xử lý
+  # # Có thể tắt nếu phi công chỉ ra lệnh bằng tiếng Anh
+  # # ──────────────────────────────────────────────────────────
+  # translation-service:
+  #   build:
+  #     context: ./services/translation-service
+  #     dockerfile: Dockerfile
+  #   container_name: drone-nllb
+  #   ports:
+  #     - "8002:8002"
+  #   volumes:
+  #     - models-cache:/models
+  #   environment:
+  #     - NLLB_MODEL=${NLLB_MODEL:-facebook/nllb-200-distilled-600M}
+  #     - MODEL_CACHE_DIR=/models/nllb
+  #   networks: [ drone-net ]
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [ gpu ]
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
+  #     interval: 60s
+  #     start_period: 90s
 
   # ──────────────────────────────────────────────────────────
   # Agent Service — Phân loại Intent bằng Ollama LLM
@@ -163,9 +171,16 @@ services:
       - LLM_MODEL=${LLM_MODEL:-llama3:8b}
       - COLLECTOR_URL=  # Không dùng collector cho Drone
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     networks: [ drone-net ]
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8005/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # ──────────────────────────────────────────────────────────
   # Ollama — LLM runtime (Llama3 8B / Gemma3 9B)
@@ -180,6 +195,12 @@ services:
       - models-cache:/root/.ollama
     networks: [ drone-net ]
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:11434" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         reservations:
@@ -198,3 +219,8 @@ services:
       - redis-data:/data
     networks: [ drone-net ]
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5

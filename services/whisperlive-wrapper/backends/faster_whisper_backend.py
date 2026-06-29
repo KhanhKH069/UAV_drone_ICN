@@ -63,8 +63,6 @@ class FasterWhisperBackend(BaseASRBackend):
         if whisper_lang == "auto":
             whisper_lang = None
 
-        duration_sec = len(audio_np) / sample_rate
-
         segments_gen, info = self._model.transcribe(
             audio_np,
             language=whisper_lang,

@@ -1,0 +1,252 @@
+{
+  "meta": {
+    "description": "UAV English 28-intent rule-based pattern reference",
+    "version": "v2.0",
+    "total_intents": 28,
+    "groups": [
+      "Câu hỏi (Q01-Q05)",
+      "Điều khiển bay (I12-I16)",
+      "Quay hướng (I07-I11)",
+      "Điều hướng (I17-I20)",
+      "Di chuyển (I01-I06, A01)",
+      "Nông nghiệp (A02-A04)"
+    ],
+    "priority_note": "Apply patterns in listed order — first match wins. Question intents (Q*) only apply when source='question'.",
+    "language": "en",
+    "note": "All patterns are English-only. Vietnamese tokens removed from A02-A04 regexes. navigate_general (259 corpus samples) has no assigned pattern — pending v2.1. Zero-sample intents (hover, descend, spray_zone, map_area, mark_anomaly) have patterns ready for future data collection."
+  },
+  "patterns": [
+    {
+      "intent": "ask_direction",
+      "id": "Q01",
+      "group": "Câu hỏi",
+      "regex": "\\b(which direction|what direction|where should i go|how to go|where.*go now)\\b",
+      "dataset_count": "~2582",
+      "example": "which direction should I go?"
+    },
+    {
+      "intent": "ask_destination_appearance",
+      "id": "Q02",
+      "group": "Câu hỏi",
+      "regex": "\\b(what.*destination look|how does.*destination|destination.*color|destination.*shape)\\b",
+      "dataset_count": "~319",
+      "example": "what does the destination look like?"
+    },
+    {
+      "intent": "ask_proximity",
+      "id": "Q03",
+      "group": "Câu hỏi",
+      "regex": "\\b(am i (near|close|at)|how far|am i (almost|nearly)|near the destination)\\b",
+      "dataset_count": "~23",
+      "example": "am I near the destination?"
+    },
+    {
+      "intent": "ask_visibility",
+      "id": "Q04",
+      "group": "Câu hỏi",
+      "regex": "\\b(can i see|is.*in (my )?view|in.*field of view|is.*visible|do i see)\\b",
+      "dataset_count": "~40",
+      "example": "can I see the destination?"
+    },
+    {
+      "intent": "ask_current_position",
+      "id": "Q05",
+      "group": "Câu hỏi",
+      "regex": "\\b(i am (on|at|in|near)|i('m| am) (on top|on the|at the)|i (move|moved|pass|passed|turn))\\b",
+      "dataset_count": "~46",
+      "example": "I am on the brown building at 8 o'clock"
+    },
+    {
+      "intent": "take_off",
+      "id": "I12",
+      "group": "Điều khiển bay",
+      "regex": "\\b(take off|takeoff|lift off|launch|take flight|depart)\\b",
+      "dataset_count": "~1",
+      "example": "take off to first floor height"
+    },
+    {
+      "intent": "land",
+      "id": "I13",
+      "group": "Điều khiển bay",
+      "regex": "\\b(land|landing|touch down|set down|descend and land)\\b",
+      "dataset_count": "~76",
+      "example": "land on lower roof"
+    },
+    {
+      "intent": "hover",
+      "id": "I14",
+      "group": "Điều khiển bay",
+      "regex": "\\b(hover|hold position|hold altitude|stay in place|maintain (position|altitude)|wait here)\\b",
+      "dataset_count": "0",
+      "example": "hover"
+    },
+    {
+      "intent": "stop",
+      "id": "I15",
+      "group": "Điều khiển bay",
+      "regex": "\\b(stop|halt|pause|freeze|cut engines)\\b",
+      "dataset_count": "~158",
+      "example": "stop, halt immediately"
+    },
+    {
+      "intent": "return_home",
+      "id": "I16",
+      "group": "Điều khiển bay",
+      "regex": "\\b(return (to )?home|go home|come back|rtl|return to base|fly back)\\b",
+      "dataset_count": "~3",
+      "example": "return home, RTL"
+    },
+    {
+      "intent": "rotate_degrees",
+      "id": "I11",
+      "group": "Quay hướng",
+      "regex": "\\b(turn|rotate|spin)\\b.*\\b\\d+\\s*degree|\\b\\d+\\s*degree.*\\b(turn|rotate)",
+      "dataset_count": "~104",
+      "example": "turn right by 180 degrees"
+    },
+    {
+      "intent": "turn_clock",
+      "id": "I10",
+      "group": "Quay hướng",
+      "regex": "\\b(head|turn|go|move|face|towards?)\\s+\\d+\\s*['\\u2019]?\\s*o['\\u2019]?\\s*clock\\b",
+      "dataset_count": "~685",
+      "example": "head towards 6 o'clock direction"
+    },
+    {
+      "intent": "turn_compass",
+      "id": "I09",
+      "group": "Quay hướng",
+      "regex": "\\b(head|turn|go|fly|face|towards?)\\s+(north|south|east|west|northeast|northwest|southeast|southwest)\\b",
+      "dataset_count": "~1072",
+      "example": "head northeast"
+    },
+    {
+      "intent": "turn_left",
+      "id": "I07",
+      "group": "Quay hướng",
+      "regex": "\\b(turn left|rotate left|spin left|bear left|veer left|head left)\\b",
+      "dataset_count": "~162",
+      "example": "turn left"
+    },
+    {
+      "intent": "turn_right",
+      "id": "I08",
+      "group": "Quay hướng",
+      "regex": "\\b(turn right|rotate right|spin right|bear right|veer right|head right)\\b",
+      "dataset_count": "~137",
+      "example": "turn right"
+    },
+    {
+      "intent": "arrived",
+      "id": "I18",
+      "group": "Điều hướng",
+      "regex": "\\b(you have arrived|you are (at|in|on) (the )?destination|you are already|reached your destination|fate is in your field)\\b",
+      "dataset_count": "~203",
+      "example": "you have arrived at your destination"
+    },
+    {
+      "intent": "describe_target",
+      "id": "I19",
+      "group": "Điều hướng",
+      "regex": "\\b(destination (is|looks?|appears?)|it is (a )?(large|small|tall|white|blue|red|green|brown|grey|gray)|you('ll)? see|look for)\\b",
+      "dataset_count": "~1906",
+      "example": "destination is a small green building"
+    },
+    {
+      "intent": "clarify_position",
+      "id": "I20",
+      "group": "Điều hướng",
+      "regex": "\\b(you are (at|on|near|close to|in front of)|your (current )?position|from (your|here)|you('re| are) currently)\\b",
+      "dataset_count": "~244",
+      "example": "you are near the destination"
+    },
+    {
+      "intent": "navigate_to",
+      "id": "I17",
+      "group": "Điều hướng",
+      "regex": "\\b(destination|reach|arrive|get to|go to|proceed to|head to|make your way)\\b",
+      "dataset_count": "~1099",
+      "example": "destination is the green building"
+    },
+    {
+      "intent": "ascend",
+      "id": "I04",
+      "group": "Di chuyển",
+      "regex": "\\b(ascend|climb|rise|go up|fly up|move up|increase altitude|higher)\\b",
+      "dataset_count": "~5",
+      "example": "ascend to roof height"
+    },
+    {
+      "intent": "descend",
+      "id": "I05",
+      "group": "Di chuyển",
+      "regex": "\\b(descend|lower|go down|fly down|decrease altitude|fly lower)\\b",
+      "dataset_count": "0",
+      "example": "descend slowly"
+    },
+    {
+      "intent": "orbit",
+      "id": "I06",
+      "group": "Di chuyển",
+      "regex": "\\b(circle|orbit|fly around|loop around|go around|revolve)\\b",
+      "dataset_count": "~2",
+      "example": "circle the building"
+    },
+    {
+      "intent": "follow_target",
+      "id": "A01",
+      "group": "Di chuyển",
+      "regex": "\\b(follow|track|chase|pursue|trail|keep up with|stay with)\\b",
+      "dataset_count": "~62",
+      "example": "follow the person in red"
+    },
+    {
+      "intent": "pass_landmark",
+      "id": "I03",
+      "group": "Di chuyển",
+      "regex": "\\b(pass(ing)?|cross(ing)?|over|through|bypass)\\s+(the\\s+)?(road|bridge|building|street|field|area)\\b",
+      "dataset_count": "~16",
+      "example": "after passing a road"
+    },
+    {
+      "intent": "move_distance",
+      "id": "I02",
+      "group": "Di chuyển",
+      "regex": "\\b\\d+\\s*(meters?|metres?|km|feet)\\b|\\bfew meter",
+      "dataset_count": "~3",
+      "example": "fly 2 meters"
+    },
+    {
+      "intent": "spray_zone",
+      "id": "A02",
+      "group": "Nông nghiệp",
+      "regex": "\\b(spray|sprinkle|dispense|fertiliz)\\b",
+      "dataset_count": "0",
+      "example": "spray this area"
+    },
+    {
+      "intent": "map_area",
+      "id": "A03",
+      "group": "Nông nghiệp",
+      "regex": "\\b(map|scan|survey|cover the area|grid)\\b",
+      "dataset_count": "0",
+      "example": "scan this field"
+    },
+    {
+      "intent": "mark_anomaly",
+      "id": "A04",
+      "group": "Nông nghiệp",
+      "regex": "\\b(mark|flag|report|anomaly|disease|pest)\\b",
+      "dataset_count": "0",
+      "example": "mark this location"
+    },
+    {
+      "intent": "move_forward",
+      "id": "I01",
+      "group": "Di chuyển",
+      "regex": "\\b(head|go|fly|move|proceed|continue|straight|forward)\\b",
+      "dataset_count": "~266",
+      "example": "head forward, go straight"
+    }
+  ]
+}

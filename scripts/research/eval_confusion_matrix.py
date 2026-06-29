@@ -2,7 +2,6 @@ import json
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-import numpy as np
 import os
 
 def evaluate_predictions(json_results_path):
@@ -30,7 +29,6 @@ def evaluate_predictions(json_results_path):
     print("=== BÁO CÁO PHÂN LOẠI (CLASSIFICATION REPORT) ===")
     print(classification_report(y_true, y_pred, labels=labels, zero_division=0))
 
-    # Vẽ Confusion Matrix
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
     plt.title('Confusion Matrix - Intent Classification')

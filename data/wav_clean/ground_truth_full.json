@@ -1,0 +1,733 @@
+{
+  "total": 104,
+  "data": [
+    {
+      "filename": "aug_ascend_0043_Aria.wav",
+      "text": "fly up to the roof level",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ascend_0043_Ryan.wav",
+      "text": "fly up to the roof level",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ascend_0042_Aria.wav",
+      "text": "fly up to survey altitude",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ascend_0042_Ryan.wav",
+      "text": "fly up to survey altitude",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ascend_0092_Aria.wav",
+      "text": "fly up and hold at thirty meters",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ascend_0092_Ryan.wav",
+      "text": "fly up and hold at thirty meters",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ascend_0010_Aria.wav",
+      "text": "ascend past the obstacle",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ascend_0010_Ryan.wav",
+      "text": "ascend past the obstacle",
+      "intent": "ascend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0049_Aria.wav",
+      "text": "am I almost at the scan area?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0049_Ryan.wav",
+      "text": "am I almost at the scan area?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0043_Aria.wav",
+      "text": "how far to the target from here?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0043_Ryan.wav",
+      "text": "how far to the target from here?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0003_Aria.wav",
+      "text": "am I at the waypoint yet?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0003_Ryan.wav",
+      "text": "am I at the waypoint yet?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0024_Aria.wav",
+      "text": "am I near the crop field?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_proximity_0024_Ryan.wav",
+      "text": "am I near the crop field?",
+      "intent": "ask_proximity",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0012_Aria.wav",
+      "text": "is the target in my view?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0012_Ryan.wav",
+      "text": "is the target in my view?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0073_Aria.wav",
+      "text": "is the destination in view now?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0073_Ryan.wav",
+      "text": "is the destination in view now?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0042_Aria.wav",
+      "text": "do I see the bridge below?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0042_Ryan.wav",
+      "text": "do I see the bridge below?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0019_Aria.wav",
+      "text": "is the road in my view?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_ask_visibility_0019_Ryan.wav",
+      "text": "is the road in my view?",
+      "intent": "ask_visibility",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_descend_0049_Aria.wav",
+      "text": "lower yourself to ground level now",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_descend_0049_Ryan.wav",
+      "text": "lower yourself to ground level now",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_descend_0047_Aria.wav",
+      "text": "decrease altitude carefully",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_descend_0047_Ryan.wav",
+      "text": "decrease altitude carefully",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_descend_0074_Aria.wav",
+      "text": "decrease altitude now",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_descend_0074_Ryan.wav",
+      "text": "decrease altitude now",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_descend_0029_Aria.wav",
+      "text": "fly lower and maintain speed",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_descend_0029_Ryan.wav",
+      "text": "fly lower and maintain speed",
+      "intent": "descend",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_hover_0047_Aria.wav",
+      "text": "maintain position above the tree line",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_hover_0047_Ryan.wav",
+      "text": "maintain position above the tree line",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_hover_0016_Aria.wav",
+      "text": "hover over the marked zone",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_hover_0016_Ryan.wav",
+      "text": "hover over the marked zone",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_hover_0030_Aria.wav",
+      "text": "hold position above the road",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_hover_0030_Ryan.wav",
+      "text": "hold position above the road",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_hover_0032_Aria.wav",
+      "text": "hover over the blue marker",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_hover_0032_Ryan.wav",
+      "text": "hover over the blue marker",
+      "intent": "hover",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_map_area_0016_Aria.wav",
+      "text": "scan the paddy field",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_map_area_0016_Ryan.wav",
+      "text": "scan the paddy field",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_map_area_0049_Aria.wav",
+      "text": "map the designated plot",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_map_area_0049_Ryan.wav",
+      "text": "map the designated plot",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_map_area_0029_Aria.wav",
+      "text": "scan the area and create a heat map",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_map_area_0029_Ryan.wav",
+      "text": "scan the area and create a heat map",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_map_area_0039_Aria.wav",
+      "text": "scan the zone for weed patches",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_map_area_0039_Ryan.wav",
+      "text": "scan the zone for weed patches",
+      "intent": "map_area",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0042_Aria.wav",
+      "text": "report the anomaly in the south field",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0042_Ryan.wav",
+      "text": "report the anomaly in the south field",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0012_Aria.wav",
+      "text": "report the disease outbreak here",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0012_Ryan.wav",
+      "text": "report the disease outbreak here",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0031_Aria.wav",
+      "text": "mark the wilting plants near the fence",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0031_Ryan.wav",
+      "text": "mark the wilting plants near the fence",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0038_Aria.wav",
+      "text": "flag the irregular patch for inspection",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_mark_anomaly_0038_Ryan.wav",
+      "text": "flag the irregular patch for inspection",
+      "intent": "mark_anomaly",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_move_distance_0043_Aria.wav",
+      "text": "advance 3 meters above the crop",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_move_distance_0043_Ryan.wav",
+      "text": "advance 3 meters above the crop",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_move_distance_0066_Aria.wav",
+      "text": "advance 6 meters",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_move_distance_0066_Ryan.wav",
+      "text": "advance 6 meters",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_move_distance_0046_Aria.wav",
+      "text": "move 8 meters left of the building",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_move_distance_0046_Ryan.wav",
+      "text": "move 8 meters left of the building",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_move_distance_0097_Aria.wav",
+      "text": "advance 600 meters and hold",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_move_distance_0097_Ryan.wav",
+      "text": "advance 600 meters and hold",
+      "intent": "move_distance",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_orbit_0093_Aria.wav",
+      "text": "fly around the field for coverage",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_orbit_0093_Ryan.wav",
+      "text": "fly around the field for coverage",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_orbit_0032_Aria.wav",
+      "text": "loop around the waypoint",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_orbit_0032_Ryan.wav",
+      "text": "loop around the waypoint",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_orbit_0047_Aria.wav",
+      "text": "revolve around the center point",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_orbit_0047_Ryan.wav",
+      "text": "revolve around the center point",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_orbit_0039_Aria.wav",
+      "text": "go around the obstacle",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_orbit_0039_Ryan.wav",
+      "text": "go around the obstacle",
+      "intent": "orbit",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0087_Aria.wav",
+      "text": "pass through the area at low altitude",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0087_Ryan.wav",
+      "text": "pass through the area at low altitude",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0078_Aria.wav",
+      "text": "bypass the road and take the eastern path",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0078_Ryan.wav",
+      "text": "bypass the road and take the eastern path",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0005_Aria.wav",
+      "text": "fly over the road",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0005_Ryan.wav",
+      "text": "fly over the road",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0008_Aria.wav",
+      "text": "pass the building on your left",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_pass_landmark_0008_Ryan.wav",
+      "text": "pass the building on your left",
+      "intent": "pass_landmark",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_return_home_0056_Aria.wav",
+      "text": "RTL, visibility dropping",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_return_home_0056_Ryan.wav",
+      "text": "RTL, visibility dropping",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_return_home_0075_Aria.wav",
+      "text": "come back to operations center",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_return_home_0075_Ryan.wav",
+      "text": "come back to operations center",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_return_home_0101_Aria.wav",
+      "text": "fly back and check in",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_return_home_0101_Ryan.wav",
+      "text": "fly back and check in",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_return_home_0018_Aria.wav",
+      "text": "go home to base",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_return_home_0018_Ryan.wav",
+      "text": "go home to base",
+      "intent": "return_home",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0007_Aria.wav",
+      "text": "dispense herbicide over the weeds",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0007_Ryan.wav",
+      "text": "dispense herbicide over the weeds",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0010_Aria.wav",
+      "text": "spray pesticide on the affected area",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0010_Ryan.wav",
+      "text": "spray pesticide on the affected area",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0016_Aria.wav",
+      "text": "spray the left side of the farm",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0016_Ryan.wav",
+      "text": "spray the left side of the farm",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0044_Aria.wav",
+      "text": "spray the fertilizer evenly",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_spray_zone_0044_Ryan.wav",
+      "text": "spray the fertilizer evenly",
+      "intent": "spray_zone",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_take_off_0063_Aria.wav",
+      "text": "take off from platform A",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_take_off_0063_Ryan.wav",
+      "text": "take off from platform A",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_take_off_0087_Aria.wav",
+      "text": "lift off and start mapping",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_take_off_0087_Ryan.wav",
+      "text": "lift off and start mapping",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_take_off_0072_Aria.wav",
+      "text": "depart and maintain ten meters",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_take_off_0072_Ryan.wav",
+      "text": "depart and maintain ten meters",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    },
+    {
+      "filename": "aug_take_off_0028_Aria.wav",
+      "text": "lift off and follow the route",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-US-AriaNeural"
+    },
+    {
+      "filename": "aug_take_off_0028_Ryan.wav",
+      "text": "lift off and follow the route",
+      "intent": "take_off",
+      "lang": "en",
+      "voice": "en-GB-RyanNeural"
+    }
+  ]
+}

@@ -27,7 +27,7 @@ AGENT_URL = os.getenv("AGENT_URL", "http://agent-service:8005")
 _http = httpx.AsyncClient(timeout=30.0, limits=httpx.Limits(max_connections=20))
 
 CRITICAL_INTENTS = {"land", "stop", "return_home"}
-MAX_BUFFER_BYTES = 16000 * 2 * 30  # 30 seconds of 16kHz mono int16 audio
+MAX_BUFFER_BYTES = 16000 * 2 * 30
 
 
 

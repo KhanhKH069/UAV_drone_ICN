@@ -1,14 +1,11 @@
 import sounddevice as sd
-import numpy as np
 import scipy.io.wavfile as wav
 import os
-import time
 
 def record_audio(filename, duration, fs=16000):
     print(f"Bắt đầu ghi âm trong {duration} giây...")
-    # Ghi âm mono, 16kHz
     recording = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='int16')
-    sd.wait()  # Chờ đến khi ghi âm xong
+    sd.wait()
     wav.write(filename, fs, recording)
     print(f"Đã lưu: {filename}")
 
@@ -30,5 +27,5 @@ if __name__ == "__main__":
             intent_label = "unknown"
 
         filename = os.path.join(output_dir, f"{intent_label}_{sample_id}.wav")
-        record_audio(filename, duration=3.0) # Thu mặc định 3 giây mỗi lệnh
+        record_audio(filename, duration=3.0)
         sample_id += 1

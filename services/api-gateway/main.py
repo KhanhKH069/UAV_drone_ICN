@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers.drone import router as drone_router
+from routers.drone import router as drone_router, _http as drone_http
 from routers.auth  import router as auth_router
 
 logging.basicConfig(
@@ -22,6 +22,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"  WhisperLive  -> {os.getenv('WHISPERLIVE_URL')}")
     logger.info(f"  Agent        -> {os.getenv('AGENT_URL')}")
     yield
+    logger.info("Closing HTTP client...")
+    await drone_http.aclose()
     logger.info("UAV_drone_ICN Gateway shutting down.")
 
 

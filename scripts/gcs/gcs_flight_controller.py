@@ -13,7 +13,7 @@ class DroneState:
     """Quản lý trạng thái chia sẻ giữa GCS Main (nhận lệnh) và Vision (điều khiển)."""
     def __init__(self):
         self.is_tracking = False
-        self.target_class = "person"  # Mặc định theo dõi người
+        self.target_class = "person"
         self.target_color = None
         self.command_queue = deque()
         self.last_heartbeat_time = time.time()
@@ -26,7 +26,6 @@ class PIDController:
     Bộ điều khiển PID rời rạc (Discrete PID) theo Ziegler-Nichols.
     Có Integral Wind-up Protection và method reset() để tránh drift.
     """
-    # Giới hạn tích phân để chống wind-up
     INTEGRAL_MAX = 50.0
 
     def __init__(self, Kp, Ki, Kd, dt=0.05):
@@ -40,7 +39,6 @@ class PIDController:
     def compute(self, error: float) -> float:
         """Tính toán output PID với anti-windup."""
         self.integral += error * self.dt
-        # Anti-windup: clamp tích phân
         self.integral = max(-self.INTEGRAL_MAX, min(self.INTEGRAL_MAX, self.integral))
         derivative = (error - self.prev_error) / self.dt
         output = (self.Kp * error) + (self.Ki * self.integral) + (self.Kd * derivative)
@@ -58,7 +56,7 @@ class UAVController:
         self.connection_string = connection_string
         self.baud = baud
         self.vehicle = None
-        self.target_altitude = 2.0  # Độ cao cất cánh mặc định (mét)
+        self.target_altitude = 2.0
         self._failsafe_thread = None
 
     def connect_vehicle(self, state: DroneState):
@@ -67,11 +65,9 @@ class UAVController:
             self.vehicle = connect(self.connection_string, wait_ready=True, baud=self.baud)
             logger.info("✅ Kết nối UAV (MAVLink) thành công!")
             
-            # Khởi động thread giám sát Failsafe
             self._failsafe_thread = threading.Thread(target=self._failsafe_monitor, args=(state,), daemon=True)
             self._failsafe_thread.start()
             
-            # Cập nhật heartbeat mỗi khi nhận tin nhắn MAVLink
             @self.vehicle.on_message('*')
             def listener(vehicle, name, message):
                 state.last_heartbeat_time = time.time()
@@ -89,14 +85,13 @@ class UAVController:
                 if time_since_last_beat > 3.0 and not state.failsafe_triggered:
                     logger.error(f"🚨 [FAILSAFE] Mất kết nối Telemetry ({time_since_last_beat:.1f}s)! Ép chuyển sang RTL/LOITER.")
                     state.failsafe_triggered = True
-                    state.is_tracking = False # Ngắt tracking
+                    state.is_tracking = False
                     
                     try:
                         self.vehicle.mode = VehicleMode("RTL")
                     except Exception as e:
                         logger.error(f"Lỗi kích hoạt RTL: {e}")
                 
-                # Reset failsafe flag nếu có sóng lại
                 elif time_since_last_beat < 1.0 and state.failsafe_triggered:
                     logger.info("✅ [FAILSAFE] Đã kết nối lại Telemetry!")
                     state.failsafe_triggered = False
@@ -114,7 +109,6 @@ class UAVController:
             logger.warning("UAV chưa kết nối. Bỏ qua lệnh.")
             return "⚠️ UAV chưa kết nối"
 
-        # --- SAFE BOUNDARIES ---
         if "distance_cm" in entities and entities["distance_cm"] > 500:
             logger.warning(f"⚠️ [SAFETY] Vượt quá khoảng cách an toàn! Giảm từ {entities['distance_cm']} xuống 500cm.")
             entities["distance_cm"] = 500
@@ -128,7 +122,6 @@ class UAVController:
 
         logger.info(f"Thực thi lệnh: {intent} | Tham số: {entities}")
 
-        # Hủy tracking khi có lệnh bay tay
         if state.is_tracking and intent not in ["follow_target", "get_battery", "get_altitude"]:
             logger.info("🛑 Hủy chế độ tự động bám đuổi để thực thi lệnh thủ công.")
             state.is_tracking = False
@@ -167,16 +160,16 @@ class UAVController:
             return f"⬅️ Lùi {distance_m:.1f}m"
         elif intent == "move_left":
             self._send_ned_velocity(0, -distance_m, 0, duration=2)
-            return f"⬆️ Trái {distance_m:.1f}m"
+            return f"\u2B05\uFE0F Left {distance_m:.1f}m"
         elif intent == "move_right":
             self._send_ned_velocity(0, distance_m, 0, duration=2)
-            return f"⬇️ Phải {distance_m:.1f}m"
+            return f"\u27A1\uFE0F Right {distance_m:.1f}m"
         elif intent == "ascend":
             current_alt = self.vehicle.location.global_relative_frame.alt if self.vehicle.location.global_relative_frame else 0
             if current_alt + distance_m > 15.0:
-                logger.warning(f"⚠️ [GEOFENCE] Trần bay tối đa là 15m. Hủy lệnh ascend.")
+                logger.warning("⚠️ [GEOFENCE] Trần bay tối đa là 15m. Hủy lệnh ascend.")
                 return f"⚠️ Từ chối lệnh: Vượt trần bay 15m (hiện tại: {current_alt:.1f}m)"
-            self._send_ned_velocity(0, 0, -distance_m, duration=2)  # Z âm là đi lên
+            self._send_ned_velocity(0, 0, -distance_m, duration=2)
             return f"⬆️ Lên cao {distance_m:.1f}m"
         elif intent == "descend":
             self._send_ned_velocity(0, 0, distance_m, duration=2)
@@ -201,7 +194,6 @@ class UAVController:
             logger.warning(f"Lệnh chưa được hỗ trợ: {intent}")
             return f"❓ Lệnh không nhận diện được: {intent}"
 
-    # --- DroneKit Helpers ---
 
     def _arm_and_takeoff(self, aTargetAltitude):
         logger.info("Basic pre-arm checks")
@@ -230,7 +222,6 @@ class UAVController:
         )
         self.vehicle.send_mavlink(msg)
         time.sleep(duration)
-        # Dừng lại
         msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
             0, 0, 0, mavutil.mavlink.MAV_FRAME_BODY_OFFSET_NED,
             0b0000111111000111, 0, 0, 0,

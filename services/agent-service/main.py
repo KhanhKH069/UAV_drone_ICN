@@ -12,7 +12,7 @@ import httpx
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from drone_prompts import DRONE_CLASSIFY_PROMPT
 
@@ -34,6 +34,8 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(_prewarm_after_delay())
     yield
     task.cancel()
+    logger.info("Closing HTTP client...")
+    await _http.aclose()
 
 
 app = FastAPI(title="UAV_drone_ICN Agent Service", version="2.0.0", lifespan=lifespan)

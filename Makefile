@@ -68,7 +68,6 @@ health:
 	@echo "Checking service health..."
 	@curl -sf http://localhost:8056/health && echo "✅ api-gateway" || echo "❌ api-gateway"
 	@curl -sf http://localhost:8001/health && echo "✅ whisperlive" || echo "❌ whisperlive"
-	@curl -sf http://localhost:8002/health && echo "✅ translation" || echo "❌ translation"
 	@curl -sf http://localhost:8005/health && echo "✅ agent" || echo "❌ agent"
 
 ## Download AI models (run BEFORE first `make up`)
@@ -86,7 +85,7 @@ clean:
 	docker compose down -v --remove-orphans
 	@echo "🗑️  All containers and volumes removed"
 
-## Restart a specific service: make restart s=translation-service
+## Restart a specific service: make restart s=api-gateway
 restart:
 ifdef s
 	docker compose restart $(s)

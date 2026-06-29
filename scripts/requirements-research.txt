@@ -1,0 +1,20 @@
+# Research scripts dependencies — dataset generation & evaluation
+# Install: pip install -r scripts/requirements-research.txt
+
+# TTS synthesis (dataset generation from text)
+edge-tts>=7.2.0          # Microsoft Neural TTS (free, no API key)
+
+# Audio processing
+librosa>=0.10.0           # MP3/WAV load, resample
+soundfile>=0.12.0         # WAV write (PCM 16-bit)
+scipy>=1.10.0             # signal processing (butter filter for noise gen)
+
+# Evaluation
+jiwer>=3.0.0              # Word Error Rate (WER) computation
+pandas>=2.0.0             # CSV export
+
+# Progress bar
+tqdm>=4.65.0
+
+# HTTP client (for transcribe API calls in eval scripts)
+requests>=2.31.0

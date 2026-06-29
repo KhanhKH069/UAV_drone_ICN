@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 scripts/health_check.py
 Kiểm tra toàn bộ Drone Edge Server stack với đo Response Time.
@@ -17,7 +16,6 @@ import time
 import urllib.request
 import urllib.error
 
-# ─── Service definitions ──────────────────────────────────────────────────────
 SERVICES = [
     {
         "name": "api-gateway",
@@ -35,14 +33,7 @@ SERVICES = [
         "critical": True,
         "emoji": "🎙️",
     },
-    {
-        "name": "translation (NLLB)",
-        "port": 8002,
-        "path": "/health",
-        "target_ms": 1000,
-        "critical": False,
-        "emoji": "🌐",
-    },
+
     {
         "name": "agent-service (LLM)",
         "port": 8005,
@@ -62,14 +53,13 @@ SERVICES = [
     {
         "name": "redis",
         "port": 6379,
-        "path": None,  # TCP-only check
+        "path": None,
         "target_ms": 50,
         "critical": False,
         "emoji": "🗄️",
     },
 ]
 
-# ─── ANSI colors ──────────────────────────────────────────────────────────────
 _R   = "\033[91m"
 _G   = "\033[92m"
 _Y   = "\033[93m"
@@ -131,12 +121,10 @@ def check(server: str, as_json: bool = False) -> dict:
         critical = svc["critical"]
 
         if svc["path"] is None:
-            # TCP check (Redis)
             ok, ms, data = _check_tcp(server, port)
         else:
             ok, ms, data = _check_http(server, port, svc["path"])
 
-        # Phân loại tốc độ
         if ok:
             if ms <= target:
                 speed_label = f"{_G}FAST{_RST}"
@@ -153,7 +141,6 @@ def check(server: str, as_json: bool = False) -> dict:
             if critical:
                 all_ok = False
 
-        # Extra info từ health response
         extra = ""
         if ok and data:
             if "model" in data:

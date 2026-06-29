@@ -11,9 +11,8 @@ Raspberry Pi 5 (Tầng 1 + 2)          Edge Server / RTX A4000 (Tầng 3)
 │  Cảm biến IMU/GPS       │  WebSocket │  /drone/stream                  │
 │  Camera (YOLOv8 + PID)  │           │                                 │
 │  MAVLink → ESP32-S3     │ ◄──────── │  Step 1: Faster-Whisper STT     │
-│                         │  JSON cmd  │  Step 2: NLLB (VI→EN nếu cần)  │
-└─────────────────────────┘           │  Step 3: Regex Intent (< 10ms)  │
-                                      │  Step 4: Ollama LLM (fallback)  │
+│                         │  JSON cmd  │  Step 2: Regex Intent (< 5ms)   │
+└─────────────────────────┘           │  Step 3: Ollama LLM (fallback)  │
                                       │                                 │
                                       │  Response:                      │
                                       │  {"intent":"move_forward",      │
@@ -203,7 +202,7 @@ asyncio.run(stream_commands())
 | **STT Model** | Faster-Whisper tiny (CPU) | Faster-Whisper small/large (GPU) |
 | **STT Latency** | 200–400ms | 150–250ms (GPU) |
 | **NLP** | Regex 28 intent | Regex + LLM Fallback |
-| **Lệnh tiếng Việt** | ❌ Không hỗ trợ | ✅ NLLB tự dịch sang EN |
+| **Lệnh tiếng Việt** | ❌ Không hỗ trợ | ✅ Hỗ trợ trực tiếp (Regex/LLM) |
 | **CPU load trên RPi5** | ~85% (STT+Vision+PID) | ~40% (chỉ Vision+PID) |
 | **Mở rộng intent** | Cần sửa code | Cập nhật prompt Ollama |
 
@@ -237,11 +236,4 @@ LLM_MODEL=phi3:mini
 docker-compose -f docker-compose.drone.yml --env-file .env.drone restart agent-service
 ```
 
-### NLLB không dịch được tiếng Việt
-```bash
-# Kiểm tra model đã tải chưa
-curl http://localhost:8002/health
 
-# Xem log
-docker logs drone-nllb
-```

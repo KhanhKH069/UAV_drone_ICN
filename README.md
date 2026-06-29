@@ -7,7 +7,7 @@
 ## 🌟 Tính năng nổi bật
 
 - 🎙️ **STT tiếng Việt** — Faster-Whisper nhận diện giọng nói real-time (< 250ms)
-- 🌐 **Dịch tự động** — NLLB-200 chuyển Việt → Anh để xử lý đồng nhất
+- 🌐 **Xử lý trực tiếp** — Hỗ trợ trực tiếp câu lệnh tiếng Việt/tiếng Anh không qua dịch thuật, giảm trễ và tiết kiệm tài nguyên VRAM
 - ⚡ **Intent Regex** — 28 intent bay cơ bản xử lý < 5ms
 - 🧠 **LLM Fallback** — Ollama (Llama3/Gemma3) chain-of-thought phân tích câu lệnh phức tạp
 - 🎯 **Computer Vision** — YOLOv8 Medium + ByteTrack bám đuổi mục tiêu với PID Controller
@@ -30,7 +30,6 @@ flowchart TD
     subgraph EdgeServer["Edge AI Server (PC/GPU)"]
         GATEWAY["🚪 API Gateway (WS/REST)"]
         STT["🗣️ WhisperLive (STT)"]
-        TRANS["🌐 NLLB-200 (Translation)"]
         REGEX["⚡ Intent Regex"]
         AGENT["🧠 Agent Service (Ollama LLM)"]
     end
@@ -47,9 +46,7 @@ flowchart TD
 
     %% Connections
     APP_PTT -- "Audio Stream (ws/wss)" --> GATEWAY
-    GATEWAY -- "Frames" --> STT
-    STT -- "Vietnamese Text" --> TRANS
-    TRANS -- "English Text" --> REGEX
+    STT -- "Transcribed Text" --> REGEX
     REGEX -- "Fallback (Complex)" --> AGENT
     REGEX -- "JSON Intent" --> GATEWAY
     AGENT -- "JSON Intent" --> GATEWAY
@@ -92,7 +89,7 @@ UAV_drone_ICN/
 ├── services/
 │   ├── api-gateway/             # WebSocket + REST gateway (JWT auth)
 │   ├── agent-service/           # Ollama LLM + LRU cache + /metrics
-│   ├── translation-service/     # NLLB-200 (Vi → En)
+│   ├── translation-service/     # NLLB-200 (Đã vô hiệu hóa để tiết kiệm RAM)
 │   └── whisperlive-wrapper/     # Faster-Whisper STT
 │
 ├── nginx/                       # Reverse proxy SSL/TLS
@@ -214,22 +211,44 @@ curl -X POST http://localhost:8005/drone/classify \
 
 ---
 
-## 🎯 Danh sách Intent hỗ trợ (17 intents)
+## 🎯 Danh sách Intent hỗ trợ (22 intents)
 
-| Intent | Ví dụ câu lệnh | Entity |
-|--------|---------------|--------|
-| `take_off` | "cất cánh", "bay lên 2 mét" | `distance_cm` |
-| `land` | "hạ cánh", "hạ xuống" | — |
-| `hover` / `stop` | "đứng yên", "giữ vị trí" | — |
-| `emergency_stop` | "dừng khẩn cấp", "dừng ngay lập tức" | — |
-| `return_home` | "về nhà", "quay về điểm xuất phát" | — |
-| `move_forward/backward` | "tiến 3 mét", "lùi lại 1 mét" | `distance_cm` |
-| `move_left/right` | "sang trái 2 mét" | `distance_cm` |
-| `ascend` / `descend` | "lên cao 1 mét", "hạ xuống" | `distance_cm` |
-| `rotate_left/right` | "xoay phải 90 độ" | `angle_deg` |
-| `follow_target` | "bám theo người kia", "theo dõi xe đỏ" | `class`, `color` |
-| `get_battery` | "pin còn bao nhiêu" | — |
-| `get_altitude` | "độ cao hiện tại" | — |
+### ✈️ Lệnh Bay Cơ Bản
+
+| Intent | Ví dụ câu lệnh (VI / EN) | Entity |
+|--------|--------------------------|--------|
+| `take_off` | "cất cánh", "bay lên 2 mét" / "take off", "lift off" | `distance_cm` |
+| `land` | "hạ cánh" / "land", "touch down" | — |
+| `hover` | "đứng yên", "giữ vị trí" / "hover", "hold position" | — |
+| `stop` | "dừng lại" / "stop", "halt", "pause" | — |
+| `emergency_stop` | "dừng khẩn cấp", "dừng ngay" / "abort", "kill motors" | — |
+| `return_home` | "về nhà" / "return home", "RTL", "fly back" | — |
+| `move_forward` | "tiến 3 mét" / "move forward", "advance" | `distance_cm` |
+| `move_backward` | "lùi lại 1 mét" / "back up", "move back" | `distance_cm` |
+| `move_left` | "sang trái 2 mét" / "strafe left", "slide left" | `distance_cm` |
+| `move_right` | "sang phải" / "strafe right", "slide right" | `distance_cm` |
+| `ascend` | "lên cao 1 mét" / "ascend", "climb", "go up" | `distance_cm` |
+| `descend` | "hạ xuống" / "descend", "go down", "lower" | `distance_cm` |
+| `rotate_left` | "xoay trái 45 độ" / "turn left", "yaw left" | `angle_deg` |
+| `rotate_right` | "xoay phải 90 độ" / "turn right", "yaw right" | `angle_deg` |
+| `follow_target` | "bám theo người kia" / "follow", "track", "chase" | `target_class`, `target_color` |
+| `get_battery` | "pin còn bao nhiêu" / "battery level", "how much battery" | — |
+| `get_altitude` | "độ cao hiện tại" / "how high", "current altitude" | — |
+
+### 🤖 Lệnh Thông Minh (LLM Fallback / Đa Dạng)
+
+| Intent | Ví dụ câu lệnh (EN) | Ghi chú |
+|--------|----------------------|----------|
+| `orbit` | "circle the building", "fly around", "loop around" | Bay vòng quanh mục tiêu |
+| `map_area` | "scan the field", "survey the zone", "grid" | Quét bản đồ khu vực |
+| `spray_zone` | "spray pesticide", "dispense fertilizer" | Phun thuốc/phân bón |
+| `ask_direction` | "which direction should I go?" | Hỏi hướng đi |
+| `ask_proximity` | "am I near the target?", "how far to go?" | Hỏi khoảng cách đến mục tiêu |
+| `ask_visibility` | "is the target in my view?" | Hỏi tầm nhìn |
+| `ask_current_position` | "I am on top of the building" | Xác nhận vị trí hiện tại |
+| `ask_destination_appearance` | "what does the destination look like?" | Hỏi mô tả đích đến |
+
+> **Lưu ý:** 17 intent đầu được xử lý bằng Regex (< 5ms). 8 intent sau cần LLM fallback (~300ms).
 
 ---
 
@@ -251,7 +270,40 @@ curl -X POST http://localhost:8005/drone/classify \
 
 ---
 
+## 🔬 Ablation Study — Kết quả thực nghiệm (Regex Mode)
+
+Chạy: `python scripts/run_ablation_study.py --mode regex --dataset data/aug_all_groups.json`
+
+| Dataset | Mode | Accuracy | Mean Latency |
+|---------|------|----------|--------------|
+| aug_all_groups (1100 mẫu) | **Regex-only** | **76.3%** | < 0.1ms |
+| val_unseen (717 mẫu phức tạp) | Regex-only | 39.5% | < 0.3ms |
+| val_unseen | **Cascade (Regex+LLM)** | ~90%* | ~300ms |
+
+*\*LLM fallback xử lý các câu không có pattern regex (turn_compass, turn_clock, describe_target...)*
+
+Intents cần LLM fallback: `turn_clock`, `turn_compass`, `navigate_to`, `describe_target`, `turn_left/right`
+
+---
+
 ## 🔄 Changelog
+
+### v2.2 (2026-06-26)
+- **[NEW]** `benchmark_latency.py`: Tự động phát hiện và load dataset WAV tiếng Anh thật (`data/wav_clean/snr_clean/`, 104 files)
+- **[NEW]** `benchmark_latency.py`: Tích hợp `ground_truth_full.json` — đo **Intent Accuracy** cùng với Latency P50/P95/P99
+- **[NEW]** `benchmark_latency.py`: CSV export thêm cột `ground_truth_intent` và `correct` để phân tích sai lệch
+- **[FIX]** `benchmark_latency.py`: Hỗ trợ response type `command_list` (WebSocket v2 format)
+- **[FIX]** `benchmark_latency.py`: Đổi default `--lang en` (phù hợp dataset tiếng Anh hiện tại)
+- **[FIX]** `gcs_flight_controller.py`: Sửa emoji sai hướng `move_left` (⬅️) và `move_right` (➡️)
+- **[DOC]** `README.md`: Cập nhật bảng intent từ 17 → **22 intents** (thêm orbit, map_area, spray_zone, 5 ask_* intents)
+
+### v2.1 (2026-06-26)
+- **[SAFETY FIX]** `emergency_stop` intent thêm vào `_INTENT_PATTERNS` — đặt **đầu tiên** để không bị `stop` bắt mất
+- **[FIX]** Sắp xếp lại thứ tự intent pattern: `return_home` trước `move_forward`, `rotate_*` trước `move_left/right`
+- **[FIX]** SenseVoice backend: tiếng Việt map sang `"vi"` thay vì `"auto"` (giảm overhead)
+- **[FIX]** Docker Compose: thêm `healthcheck` cho tất cả services + `condition: service_healthy`
+- **[NEW]** `test/test_nlp.py`: 71 unit test bao phủ safety, intent, entity, spell, corpus
+- **[NEW]** `scripts/run_ablation_study.py`: Ablation Study tự động trên dataset thật
 
 ### v2.0 (2026-06-10)
 - **GCS Vision**: CPU fallback tự động, FPS counter, confidence threshold 50%, standalone mode, PID visualizer
@@ -264,7 +316,7 @@ curl -X POST http://localhost:8005/drone/classify \
 - **Android App**: Animated Waveform (RMS), Telemetry pitch/roll/yaw, Command History Screen, WER tracking
 
 ### v1.0
-- Pipeline cơ bản: STT → NLLB → Regex → LLM → MAVLink
+- Pipeline cơ bản: STT → Regex → LLM → MAVLink (Đã tối ưu hóa loại bỏ NLLB dịch thuật để tiết kiệm VRAM)
 - Android App PTT cơ bản
 - YOLOv8 + ByteTrack tracking
 

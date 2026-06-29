@@ -13,23 +13,20 @@ import os
 from datetime import datetime
 import csv
 
-# Import từ các module GCS
 from gcs_flight_controller import DroneState, UAVController, command_executor_loop
 from gcs_vision import vision_tracking_loop
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("gcs_main")
 
-# ANSI color codes
-_R   = "\033[91m"  # Red
-_G   = "\033[92m"  # Green
-_Y   = "\033[93m"  # Yellow
-_B   = "\033[94m"  # Blue
-_C   = "\033[96m"  # Cyan
-_RST = "\033[0m"   # Reset
+_R   = "\033[91m"
+_G   = "\033[92m"
+_Y   = "\033[93m"
+_B   = "\033[94m"
+_C   = "\033[96m"
+_RST = "\033[0m"
 _BOLD = "\033[1m"
 
-# Cờ shutdown toàn cục
 _shutdown_event = threading.Event()
 
 class BlackboxLogger:
@@ -39,7 +36,6 @@ class BlackboxLogger:
         filename = datetime.now().strftime("flight_log_%Y%m%d_%H%M%S.csv")
         self.filepath = os.path.join(log_dir, filename)
         
-        # Tạo header CSV (mở rộng với FPS và PID errors)
         with open(self.filepath, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([
@@ -89,7 +85,7 @@ def _print_status(state: DroneState, last_intent: str, telemetry: dict):
         end="", flush=True
     )
 
-async def gcs_listener_loop(server_uri: str, controller: UAVController, state: DroneState):
+async def gcs_listener_loop(server_uri: str, token: str, controller: UAVController, state: DroneState):
     """Mở WebSocket, lắng nghe lệnh và gửi Telemetry định kỳ."""
     logger.info(f"Kết nối WebSocket tới API Gateway: {server_uri}")
     
@@ -100,7 +96,9 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
     while not _shutdown_event.is_set():
         try:
             async with websockets.connect(server_uri) as ws:
-                logger.info(f"\n{_G}✅ Đã kết nối WebSocket! Đang chờ lệnh từ App...{_RST}")
+                logger.info(f"\n{_G}✅ Đã kết nối WebSocket! Đang gửi xác thực...{_RST}")
+                await ws.send(json.dumps({"event": "auth", "token": token}))
+                logger.info(f"{_G}✅ Đang chờ lệnh từ App...{_RST}")
 
                 async def receive_commands_task():
                     nonlocal last_executed_intent
@@ -117,7 +115,7 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                             entities = msg.get("entities", {})
                             raw_text = msg.get("raw_text")
                             conf = msg.get("confidence")
-                            print()  # Newline sau STT partial
+                            print()
                             import time
                             now = time.time()
                             if now - state.last_command_time < 0.8:
@@ -135,7 +133,7 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                         elif msg_type == "command_list":
                             commands = msg.get("commands", [])
                             raw_text = msg.get("raw_text")
-                            print()  # Newline sau STT partial
+                            print()
                             import time
                             now = time.time()
                             if now - state.last_command_time < 0.8:
@@ -153,7 +151,7 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                                 state.command_queue.append(c)
 
                         elif msg_type == "unknown":
-                            print()  # Newline
+                            print()
                             logger.warning(f"{_Y}❓ Không rõ lệnh{_RST}: '{msg.get('raw_text', '')}'")
 
                 async def send_telemetry_task():
@@ -180,10 +178,8 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                                 last_telemetry = data
                                 await ws.send(json.dumps({"event": "telemetry", "data": data}))
                                 
-                                # Ghi log vào file CSV Blackbox
                                 blackbox.log(data, last_executed_intent)
 
-                                # In status bar mỗi 5 giây
                                 if tick % 5 == 0:
                                     _print_status(state, last_executed_intent, data)
                                 tick += 1
@@ -191,7 +187,6 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                             logger.error(f"Lỗi gửi telemetry: {e}")
                         await asyncio.sleep(1.0)
 
-                # Chạy song song Listener và Telemetry Sender
                 recv_task = asyncio.create_task(receive_commands_task())
                 telemetry_task = asyncio.create_task(send_telemetry_task())
 
@@ -200,7 +195,6 @@ async def gcs_listener_loop(server_uri: str, controller: UAVController, state: D
                 )
                 for task in pending:
                     task.cancel()
-                # Re-raise exception nếu có task fail — để outer loop có thể reconnect
                 for task in done:
                     if task.exception():
                         raise task.exception()
@@ -226,7 +220,6 @@ def main():
     parser.add_argument("--video-source", default=1, type=int, help="ID thiết bị Video Capture")
     args = parser.parse_args()
 
-    # ── Graceful Shutdown Handler ──────────────────────────────────────────
     def _handle_shutdown(sig, frame):
         print(f"\n{_Y}\u26a0️  Nhận tín hiệu shutdown ({sig}). GCS đang tắt an toàn...{_RST}")
         _shutdown_event.set()
@@ -235,7 +228,6 @@ def main():
     signal.signal(signal.SIGINT, _handle_shutdown)
     signal.signal(signal.SIGTERM, _handle_shutdown)
 
-    # In banner khởi động
     print(f"""
 {_B}╭────────────────────────────────────────────────────╮
 │  🚁 GCS Engine v2.0 — UAV Voice Control System        │
@@ -246,26 +238,21 @@ def main():
 ╰────────────────────────────────────────────────────╯{_RST}
 """)
 
-    # Trạng thái chia sẻ toàn cục
     global_state = DroneState()
 
-    # Khởi tạo Drone Controller (MAVLink + Failsafe)
     controller = UAVController(args.port, args.baud)
     controller.connect_vehicle(global_state)
 
-    # Khởi động Luồng CV + PID (chạy nền)
     vision_thread = threading.Thread(
         target=vision_tracking_loop, args=(global_state, controller, args.video_source), daemon=True
     )
     vision_thread.start()
 
-    # Khởi động Luồng Command Executor
     executor_thread = threading.Thread(
         target=command_executor_loop, args=(global_state, controller), daemon=True
     )
     executor_thread.start()
 
-    # Lấy JWT Token
     try:
         req = urllib.request.Request(
             f"{args.server}/auth/token",
@@ -280,12 +267,10 @@ def main():
         logger.error(f"{_R}❌ Không thể lấy JWT Token từ server: {e}{_RST}")
         sys.exit(1)
 
-    # URI Websocket với JWT Token
     uri = f"{args.ws_server}?token={token}&drone_id={args.drone_id}&lang={args.lang}"
 
-    # Bắt đầu vòng lặp Listener vô tận
     try:
-        asyncio.run(gcs_listener_loop(uri, controller, global_state))
+        asyncio.run(gcs_listener_loop(uri, token, controller, global_state))
     except KeyboardInterrupt:
         logger.info(f"{_Y}Đã dừng GCS Engine (Ctrl+C).{_RST}")
 

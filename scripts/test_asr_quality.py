@@ -4,7 +4,6 @@ import base64
 import numpy as np
 import requests
 
-# URL của whisperlive-wrapper (đang chạy cổng 8001 trong docker-compose)
 ASR_URL = "http://localhost:8001/transcribe"
 
 
@@ -19,21 +18,18 @@ def test_asr_with_wav(wav_path):
 
     samplerate, data = wav_read(wav_path)
 
-    # Chuyển đổi sang float32 nếu cần
     if data.dtype == np.int16:
         audio_f32 = data.astype(np.float32) / 32768.0
     elif data.dtype == np.float32:
         audio_f32 = data
     else:
-        # Thường là int32 hoặc các dạng khác, đưa về float32
         audio_f32 = data.astype(np.float32) / np.max(np.abs(data))
 
-    # Encode sang base64
     audio_b64 = base64.b64encode(audio_f32.tobytes()).decode("utf-8")
 
     payload = {
         "audio_b64": audio_b64,
-        "language": "vie_Latn",  # Hoặc chỉ định "vie_Latn", "jpn_Jpan"...
+        "language": "vie_Latn",
         "sample_rate": samplerate,
     }
 
@@ -63,5 +59,4 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Sử dụng: python scripts/test_asr_quality.py <đường_dẫn_file_wav>")
     else:
-        # Nếu chưa có file WAV, bạn hãy dùng ghi âm máy tính hoặc lấy 1 file mẫu
         test_asr_with_wav(sys.argv[1])
